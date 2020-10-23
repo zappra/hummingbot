@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
-from .script_interface import OnTick, OnStatus, PMMParameters, CallNotify, CallLog
+from .script_interface import OnTick, OnStatus, PMMParameters, CallNotify, CallLog, CallStop
 from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent
@@ -63,7 +63,8 @@ class ScriptBase:
                 self.on_sell_order_completed(item)
             elif isinstance(item, OnStatus):
                 status_msg = self.on_status()
-                self.notify(f"Script status: {status_msg}")
+                if status_msg:
+                    self.notify(f"Script status: {status_msg}")
 
     def notify(self, msg: str):
         """
@@ -79,6 +80,13 @@ class ScriptBase:
         :param msg: The message.
         """
         self._child_queue.put(CallLog(msg))
+
+    def request_stop(self, reason: str):
+        """
+        Request stop command on main strategy in the event of error or custom kill switch type condition
+        :param reason: Reason, which will be logged by main application
+        """
+        self._child_queue.put(CallStop(reason))
 
     def avg_mid_price(self, interval: int, length: int) -> Optional[Decimal]:
         """

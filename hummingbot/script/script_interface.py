@@ -128,3 +128,11 @@ class CallLog:
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+
+class CallStop:
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {str(self.__dict__)}"
