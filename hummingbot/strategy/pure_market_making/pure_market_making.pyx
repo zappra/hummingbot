@@ -477,12 +477,12 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         quote_ratio = quote_balance / total_in_quote if total_in_quote > 0 else 0
         data=[
             ["", base_asset, quote_asset],
-            ["Total Balance", round(base_balance, 4), round(quote_balance, 4)],
-            ["Available Balance", round(available_base_balance, 4), round(available_quote_balance, 4)],
-            [f"Current Value ({quote_asset})", round(base_value, 4), round(quote_balance, 4)]
+            ["Total", round(base_balance, 4), round(quote_balance, 4)],
+            ["Available", round(available_base_balance, 4), round(available_quote_balance, 4)],
+            [f"Value ({quote_asset})", round(base_value, 4), round(quote_balance, 4)]
         ]
         if to_show_current_pct:
-            data.append(["Current %", f"{base_ratio:.1%}", f"{quote_ratio:.1%}"])
+            data.append(["Value (%)", f"{base_ratio:.1%}", f"{quote_ratio:.1%}"])
         df = pd.DataFrame(data=data)
         return df
 
@@ -491,7 +491,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         active_orders = self.active_orders
         no_sells = len([o for o in active_orders if not o.is_buy and o.client_order_id not in self._hanging_order_ids])
         active_orders.sort(key=lambda x: x.price, reverse=True)
-        columns = ["Level", "Type", "Price", "Spread", "Amount (Orig)", "Amount (Adj)", "Age"]
+        columns = ["#", "Type", "Price", "Spread", "Amt", "Adj", "Age"]
         data = []
         lvl_buy, lvl_sell = 0, 0
         for idx in range(0, len(active_orders)):
@@ -525,7 +525,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
     def market_status_data_frame(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> pd.DataFrame:
         markets_data = []
-        markets_columns = ["Exchange", "Market", "Best Bid", "Best Ask", f"Ref Price ({self._price_type.name})"]
+        markets_columns = ["Exchange", "Market", "Bid", "Ask", "Ref"]
         if self._price_type is PriceType.LastOwnTrade and self._last_own_trade_price.is_nan():
             markets_columns[-1] = "Ref Price (MidPrice)"
         market_books = [(self._market_info.market, self._market_info.trading_pair)]
@@ -558,7 +558,8 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         warning_lines.extend(self.network_warning([self._market_info]))
 
         markets_df = self.market_status_data_frame([self._market_info])
-        lines.extend(["", "  Markets:"] + ["    " + line for line in markets_df.to_string(index=False).split("\n")])
+        lines.extend(["", "<b>Markets:</b><pre>"] + ["  " + line for line in markets_df.to_string(index=False).split("\n")])
+        lines.extend(["</pre>"])
 
         assets_df = self.pure_mm_assets_df(not self._inventory_skew_enabled)
         # append inventory skew stats.
@@ -569,19 +570,21 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         first_col_length = max(*assets_df[0].apply(len))
         df_lines = assets_df.to_string(index=False, header=False,
                                        formatters={0: ("{:<" + str(first_col_length) + "}").format}).split("\n")
-        lines.extend(["", "  Assets:"] + ["    " + line for line in df_lines])
+        lines.extend(["", "<b>Assets:</b><pre>"] + ["  " + line for line in df_lines])
+        lines.extend(["</pre>"])
 
         # See if there're any open orders.
         if len(self.active_orders) > 0:
             df = self.active_orders_df()
-            lines.extend(["", "  Orders:"] + ["    " + line for line in df.to_string(index=False).split("\n")])
+            lines.extend(["", "<b>Orders:</b><pre>"] + ["  " + line for line in df.to_string(index=False).split("\n")])
+            lines.extend(["</pre>"])
         else:
-            lines.extend(["", "  No active maker orders."])
+            lines.extend(["", "<b>No active maker orders.</b>"])
 
         warning_lines.extend(self.balance_warning([self._market_info]))
 
         if len(warning_lines) > 0:
-            lines.extend(["", "*** WARNINGS ***"] + warning_lines)
+            lines.extend(["", "<b>*** WARNINGS ***</b>"] + warning_lines)
 
         return "\n".join(lines)
 

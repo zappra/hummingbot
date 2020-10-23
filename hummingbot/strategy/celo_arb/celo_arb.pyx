@@ -187,7 +187,8 @@ cdef class CeloArbStrategy(StrategyBase):
         series = [pd.Series(["Celo", f"{CELO_BASE}-{CELO_QUOTE}", celo_bid_price, celo_ask_price, celo_mid_price],
                             index=markets_df.columns)]
         markets_df = markets_df.append(series, ignore_index=True)
-        lines.extend(["", "  Markets:"] + ["    " + line for line in markets_df.to_string(index=False).split("\n")])
+        lines.extend(["", "<b>Markets:</b><pre>"] + ["    " + line for line in markets_df.to_string(index=False).split("\n")])
+        lines.extend(["</pre>"])
 
         warning_lines.extend(self.network_warning([self._market_info]))
 
@@ -198,12 +199,13 @@ cdef class CeloArbStrategy(StrategyBase):
             series.append(pd.Series(["Celo", token, round(bal.total, 2), round(bal.available(), 2)],
                                     index=assets_df.columns))
         assets_df = assets_df.append(series, ignore_index=True)
-        lines.extend(["", "  Assets:"] +
-                     ["    " + line for line in str(assets_df).split("\n")])
+        lines.extend(["", "<b>Assets:</b><pre>"] +
+                     ["  " + line for line in str(assets_df).split("\n")])
+        lines.extend(["</pre>"])
 
-        lines.extend(["", "  Profitability:"] +
-                     [f"    buy at celo, sell at {self._exchange}: {celo_buy.profit:.2%}"] +
-                     [f"    sell at celo, buy at {self._exchange}: {celo_sell.profit:.2%}"])
+        lines.extend(["", "<b>Profitability:</b>"] +
+                     [f"<pre>  Buy at celo, sell at {self._exchange}: {celo_buy.profit:.2%}</pre>"] +
+                     [f"<pre>  Sell at celo, buy at {self._exchange}: {celo_sell.profit:.2%}</pre>"])
 
         warning_lines.extend(self.balance_warning([self._market_info]))
 

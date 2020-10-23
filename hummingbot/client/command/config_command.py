@@ -4,7 +4,6 @@ from typing import (
     Any,
 )
 from decimal import Decimal
-import pandas as pd
 from os.path import join
 from hummingbot.client.settings import (
     GLOBAL_CONFIG_PATH,
@@ -57,20 +56,18 @@ class ConfigCommand:
 
     def list_configs(self,  # type: HummingbotApplication
                      ):
-        columns = ["Key", "  Value"]
-        data = [[cv.key, cv.value] for cv in global_config_map.values()
-                if cv.key in global_configs_to_display and not cv.is_secure]
-        df = pd.DataFrame(data=data, columns=columns)
-        self._notify("\nGlobal Configurations:")
-        lines = ["    " + line for line in df.to_string(index=False).split("\n")]
-        self._notify("\n".join(lines))
+        msg = "<b>Global Configurations:</b>\n"
+        for cv in global_config_map.values():
+            if cv.key in global_configs_to_display and not cv.is_secure:
+                msg += f"<pre>  {cv.key}: {cv.value}</pre>\n"
+        self._notify(msg)
 
+        msg = "<b>Strategy Configurations:</b>\n"
         if self.strategy_name is not None:
-            data = [[cv.key, cv.value] for cv in self.strategy_config_map.values() if not cv.is_secure]
-            df = pd.DataFrame(data=data, columns=columns)
-            self._notify("\nStrategy Configurations:")
-            lines = ["    " + line for line in df.to_string(index=False).split("\n")]
-            self._notify("\n".join(lines))
+            for cv in self.strategy_config_map.values():
+                if not cv.is_secure:
+                    msg += f"<pre>  {cv.key}: {cv.value}</pre>\n"
+        self._notify(msg)
 
     def config_able_keys(self  # type: HummingbotApplication
                          ) -> List[str]:
