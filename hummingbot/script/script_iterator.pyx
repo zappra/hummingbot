@@ -8,6 +8,7 @@ from hummingbot.core.clock cimport Clock
 from hummingbot.core.clock import Clock
 from hummingbot.strategy.pure_market_making import PureMarketMakingStrategy
 from hummingbot.core.event.events import (
+    OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent,
     MarketEvent,
@@ -41,9 +42,11 @@ cdef class ScriptIterator(TimeIterator):
         self._strategy = strategy
         self._is_unit_testing_mode = is_unit_testing_mode
         self._queue_check_interval = queue_check_interval
+        self._order_filled_forwarder = SourceInfoEventForwarder(self._order_filled)
         self._did_complete_buy_order_forwarder = SourceInfoEventForwarder(self._did_complete_buy_order)
         self._did_complete_sell_order_forwarder = SourceInfoEventForwarder(self._did_complete_sell_order)
         self._event_pairs = [
+            (MarketEvent.OrderFilled, self._order_filled_forwarder),
             (MarketEvent.BuyOrderCompleted, self._did_complete_buy_order_forwarder),
             (MarketEvent.SellOrderCompleted, self._did_complete_sell_order_forwarder)
         ]
@@ -88,6 +91,12 @@ cdef class ScriptIterator(TimeIterator):
                 setattr(pmm_strategy, attr, param_value)
         cdef object on_tick = OnTick(self.strategy.get_mid_price(), pmm_strategy, self.all_total_balances())
         self._parent_queue.put(on_tick)
+
+    def _order_filled(self,
+                      event_tag: int,
+                      market: ExchangeBase,
+                      event: OrderFilledEvent):
+        self._parent_queue.put(event)
 
     def _did_complete_buy_order(self,
                                 event_tag: int,

@@ -6,6 +6,7 @@ from statistics import mean, median
 from operator import itemgetter
 from .script_interface import OnTick, OnStatus, PMMParameters, CallNotify, CallLog, CallStop
 from hummingbot.core.event.events import (
+    OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent
 )
@@ -57,6 +58,8 @@ class ScriptBase:
                 self.pmm_parameters = item.pmm_parameters
                 self.all_total_balances = item.all_total_balances
                 self.on_tick()
+            elif isinstance(item, OrderFilledEvent):
+                self.on_order_filled(item)
             elif isinstance(item, BuyOrderCompletedEvent):
                 self.on_buy_order_completed(item)
             elif isinstance(item, SellOrderCompletedEvent):
@@ -181,6 +184,12 @@ class ScriptBase:
         """
         Is called upon OnTick message received, which is every second on normal HB configuration.
         It is intended to be implemented by the derived class of this class.
+        """
+        pass
+
+    def on_order_filled(self, event: OrderFilledEvent):
+        """
+        Called when order is filled
         """
         pass
 
