@@ -103,4 +103,9 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     ticker_parser.add_argument("--market", type=str, dest="market", help="The market (trading pair) of the order book")
     ticker_parser.set_defaults(func=hummingbot.ticker)
 
+    script_parser = subparsers.add_parser("script", help="Send command to running script instance")
+    script_parser.add_argument("cmd", nargs="?", default=None, help="Command")
+    script_parser.add_argument("args", nargs="*", default=None, help="Arguments")
+    script_parser.set_defaults(func=hummingbot.script_command)
+
     return parser

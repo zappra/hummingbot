@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
-from .script_interface import OnTick, OnStatus, PMMParameters, CallNotify, CallLog, CallStop
+from .script_interface import OnTick, OnStatus, OnCommand, PMMParameters, CallNotify, CallLog, CallStop
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
@@ -68,6 +68,8 @@ class ScriptBase:
                 status_msg = self.on_status()
                 if status_msg:
                     self.notify(f"Script status: {status_msg}")
+            elif isinstance(item, OnCommand):
+                self.on_command(item.cmd, item.args)
 
     def notify(self, msg: str):
         """
@@ -214,3 +216,10 @@ class ScriptBase:
         :returns status message.
         """
         return f"{self.__class__.__name__} is active."
+
+    def on_command(self, cmd: str, args: List[str]):
+        """
+        Called when 'script' command is issued on the Hummingbot application
+        The remaining arguments are passed in the cmd string for the script to parse
+        """
+        pass
