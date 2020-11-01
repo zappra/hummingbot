@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
-from .script_interface import OnTick, OnStatus, OnCommand, PMMParameters, CallNotify, CallLog, CallStop
+from .script_interface import OnTick, OnStatus, OnCommand, PMMParameters, CallNotify, CallSendImage, CallLog, CallStop
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
@@ -78,6 +78,12 @@ class ScriptBase:
         :param msg: The message.
         """
         self._child_queue.put(CallNotify(msg))
+
+    def send_image(self, image: str):
+        """
+        Send image via notifiers
+        """
+        self._child_queue.put(CallSendImage(image))
 
     def log(self, msg: str):
         """
@@ -220,6 +226,5 @@ class ScriptBase:
     def on_command(self, cmd: str, args: List[str]):
         """
         Called when 'script' command is issued on the Hummingbot application
-        The remaining arguments are passed in the cmd string for the script to parse
         """
         pass

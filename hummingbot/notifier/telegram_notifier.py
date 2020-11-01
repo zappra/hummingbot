@@ -153,6 +153,9 @@ class TelegramNotifier(NotifierBase):
         for chunk in msg_chunks:
             self._msg_queue.put_nowait("\n".join(chunk))
 
+    def add_file_to_queue(self, f):
+        self._updater.bot.send_photo(self._chat_id, f)
+
     async def send_msg_from_queue(self):
         while True:
             try:

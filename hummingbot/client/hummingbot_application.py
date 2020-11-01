@@ -110,6 +110,16 @@ class HummingbotApplication(*commands):
         for notifier in self.notifiers:
             notifier.add_msg_to_queue(msg)
 
+    def _send_image(self, image: str):
+        try:
+            f = open(image, 'rb')
+        except:
+            _notify(f'Could not open {image}')
+            return
+
+        for notifier in self.notifiers:
+            notifier.add_file_to_queue(f)
+
     def _handle_command(self, raw_command: str):
         # unset to_stop_config flag it triggered before loading any command
         if self.app.to_stop_config:

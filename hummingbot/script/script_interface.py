@@ -129,6 +129,13 @@ class CallNotify:
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
 
+class CallSendImage:
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {str(self.__dict__)}"
+
 
 class CallLog:
     def __init__(self, msg):
