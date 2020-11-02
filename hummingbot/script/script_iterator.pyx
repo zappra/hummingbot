@@ -17,7 +17,7 @@ from hummingbot.core.event.event_forwarder import SourceInfoEventForwarder
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.script.script_process import run_script
-from hummingbot.script.script_interface import StrategyParameter, PMMParameters, OnTick, OnStatus, OnCommand, CallNotify, CallSendImage, CallLog, CallStop
+from hummingbot.script.script_interface import StrategyParameter, PMMParameters, OnTick, OnStatus, OnRefresh, OnCommand, CallNotify, CallSendImage, CallLog, CallStop
 
 sir_logger = None
 
@@ -145,6 +145,9 @@ cdef class ScriptIterator(TimeIterator):
 
     def request_command(self, cmd: str, args: List[str]):
         self._parent_queue.put(OnCommand(cmd, args))
+
+    def request_updated_parameters(self):
+        self._parent_queue.put(OnRefresh())
 
     def all_total_balances(self):
         all_bals = {m.name: m.get_all_balances() for m in self._markets}

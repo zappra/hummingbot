@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
-from .script_interface import OnTick, OnStatus, OnCommand, PMMParameters, CallNotify, CallSendImage, CallLog, CallStop
+from .script_interface import OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage, CallLog, CallStop
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
@@ -70,6 +70,8 @@ class ScriptBase:
                     self.notify(f"Script status: {status_msg}")
             elif isinstance(item, OnCommand):
                 self.on_command(item.cmd, item.args)
+            elif isinstance(item, OnRefresh):
+                self.on_order_refresh()
 
     def notify(self, msg: str):
         """
@@ -226,5 +228,12 @@ class ScriptBase:
     def on_command(self, cmd: str, args: List[str]):
         """
         Called when 'script' command is issued on the Hummingbot application
+        """
+        pass
+
+    def on_order_refresh(self):
+        """
+        Called when order cycle is refreshing
+        TODO: default implementation should make some parameter change such that main process won't stall
         """
         pass

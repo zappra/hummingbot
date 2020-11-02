@@ -2,6 +2,7 @@ from typing import Dict, List
 from decimal import Decimal
 
 child_queue = None
+force_updates = False
 
 
 def set_child_queue(queue):
@@ -24,14 +25,20 @@ class StrategyParameter(object):
 
     def __set__(self, obj, value):
         global child_queue
+        global force_updates
         old_value = getattr(obj, self.attr)
-        if old_value is not None and old_value != value:
+        if (old_value is not None and old_value != value) or force_updates is True:
             self.updated_value = value
             child_queue.put(self)
         setattr(obj, self.attr, value)
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+    @staticmethod
+    def set_force_updates(force: bool):
+        global force_updates
+        force_updates = force
 
 
 class PMMParameters:
@@ -53,6 +60,7 @@ class PMMParameters:
         self._filled_order_delay = None
         self._hanging_orders_enabled = None
         self._hanging_orders_cancel_pct = None
+        self._order_override = None
 
         # These below parameters are yet to open for the script
 
@@ -81,6 +89,7 @@ class PMMParameters:
     filled_order_delay = StrategyParameter("filled_order_delay")
     hanging_orders_enabled = StrategyParameter("hanging_orders_enabled")
     hanging_orders_cancel_pct = StrategyParameter("hanging_orders_cancel_pct")
+    order_override = StrategyParameter("order_override")
 
     # inventory_skew_enabled = PMMParameter("inventory_skew_enabled")
     # inventory_target_base_pct = PMMParameter("inventory_target_base_pct")
@@ -111,6 +120,9 @@ class OnTick:
 
 
 class OnStatus:
+    pass
+
+class OnRefresh:
     pass
 
 class OnCommand:
