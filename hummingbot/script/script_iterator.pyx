@@ -117,10 +117,10 @@ cdef class ScriptIterator(TimeIterator):
                 continue
             item = self._child_queue.get()
             # print(f"received: {str(item)}")
-            self.logger().info(f"received: {str(item)}")
             if item is None:
                 break
             if isinstance(item, StrategyParameter):
+                self.logger().info(f"received: {str(item)}")
                 setattr(self._strategy, item.name, item.updated_value)
             elif isinstance(item, CallNotify) and not self._is_unit_testing_mode:
                 # ignore this on unit testing as the below import will mess up unit testing.
@@ -147,6 +147,7 @@ cdef class ScriptIterator(TimeIterator):
         self._parent_queue.put(OnCommand(cmd, args))
 
     def request_updated_parameters(self):
+        self.logger().info(f"sending: request_updated_parameters")
         self._parent_queue.put(OnRefresh())
 
     def all_total_balances(self):
