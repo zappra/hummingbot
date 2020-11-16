@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
-from .script_interface import OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage, CallLog, CallStop
+from .script_interface import OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage, CallLog, CallStop, CallForceRefresh
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
@@ -100,6 +100,12 @@ class ScriptBase:
         :param reason: Reason, which will be logged by main application
         """
         self._child_queue.put(CallStop(reason))
+    
+    def force_order_refresh(self):
+        """
+        Force an order refresh cycle to occur
+        """
+        self._child_queue.put(CallForceRefresh())
 
     def avg_mid_price(self, interval: int, length: int) -> Optional[Decimal]:
         """
@@ -237,3 +243,4 @@ class ScriptBase:
         TODO: default implementation should make some parameter change such that main process won't stall
         """
         pass
+

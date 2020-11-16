@@ -17,7 +17,7 @@ from hummingbot.core.event.event_forwarder import SourceInfoEventForwarder
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.script.script_process import run_script
-from hummingbot.script.script_interface import StrategyParameter, PMMParameters, OnTick, OnStatus, OnRefresh, OnCommand, CallNotify, CallSendImage, CallLog, CallStop
+from hummingbot.script.script_interface import StrategyParameter, PMMParameters, OnTick, OnStatus, OnRefresh, OnCommand, CallNotify, CallSendImage, CallLog, CallStop, CallForceRefresh
 
 sir_logger = None
 
@@ -130,13 +130,15 @@ cdef class ScriptIterator(TimeIterator):
                 # ignore this on unit testing as the below import will mess up unit testing.
                 from hummingbot.client.hummingbot_application import HummingbotApplication
                 HummingbotApplication.main_application()._send_image(item.msg)
-            elif isinstance(item, CallStop):
+            elif isinstance(item, CallStop) and not self._is_unit_testing_mode:
                 msg = 'Stop request has been received from script\n'
                 msg += f"Reason: {item.msg}"
                 from hummingbot.client.hummingbot_application import HummingbotApplication
                 hb = HummingbotApplication.main_application()
                 hb._notify(msg)
                 hb.stop()
+            elif isinstance(item, CallForceRefresh):
+                self._strategy.force_order_refresh()
             elif isinstance(item, CallLog):
                 self.logger().info(f"script - {item.msg}")
 

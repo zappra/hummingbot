@@ -1193,6 +1193,11 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         if self._cancel_timestamp <= self._current_timestamp:
             self._cancel_timestamp = min(self._create_timestamp, next_cycle)
 
+    def force_order_refresh(self):
+        self._create_timestamp = self._current_timestamp
+        self._cancel_timestamp = self._current_timestamp
+        self._script_order_refresh_called = False
+
     def notify_hb_app(self, msg: str):
         if self._hb_app_notification:
             from hummingbot.client.hummingbot_application import HummingbotApplication
