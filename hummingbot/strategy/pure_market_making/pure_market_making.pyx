@@ -1145,6 +1145,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                                          else NaN)
             str bid_order_id, ask_order_id
             bint orders_created = False
+            double temp_refresh_time = 0.0
 
         if len(proposal.buys) > 0:
             if self._logging_options & self.OPTION_LOG_CREATE_ORDER:
@@ -1184,6 +1185,13 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 orders_created = True
         if orders_created:
             self.set_timers()
+        else:
+            # we didn't create any orders for some reason, try again in 1 minute
+            temp_refresh_time = self._order_refresh_time
+            self._order_refresh_time = 60.0
+            self.set_timers()
+            self._order_refresh_time = temp_refresh_time
+
 
     cdef set_timers(self):
         cdef double next_cycle = self._current_timestamp + self._order_refresh_time
