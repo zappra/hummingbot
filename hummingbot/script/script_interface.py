@@ -52,6 +52,7 @@ class PMMParameters:
         self._order_levels = None
         self._bid_spread = None
         self._ask_spread = None
+        self._minimum_spread = None
         self._order_amount = None
         self._order_level_spread = None
         self._order_level_amount = None
@@ -74,7 +75,6 @@ class PMMParameters:
         # self._price_ceiling = None
         # self._price_floor = None
         # self._ping_pong_enabled = None
-        # self._minimum_spread = None
 
     buy_levels = StrategyParameter("buy_levels")
     sell_levels = StrategyParameter("sell_levels")
@@ -90,6 +90,7 @@ class PMMParameters:
     hanging_orders_enabled = StrategyParameter("hanging_orders_enabled")
     hanging_orders_cancel_pct = StrategyParameter("hanging_orders_cancel_pct")
     order_override = StrategyParameter("order_override")
+    minimum_spread = StrategyParameter("minimum_spread")
 
     # inventory_skew_enabled = PMMParameter("inventory_skew_enabled")
     # inventory_target_base_pct = PMMParameter("inventory_target_base_pct")
@@ -101,7 +102,6 @@ class PMMParameters:
     # price_ceiling = PMMParameter("price_ceiling")
     # price_floor = PMMParameter("price_floor")
     # ping_pong_enabled = PMMParameter("ping_pong_enabled")
-    # minimum_spread = PMMParameter("minimum_spread")
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"

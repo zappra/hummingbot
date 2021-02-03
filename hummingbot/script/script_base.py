@@ -21,7 +21,7 @@ class ScriptBase:
         self._parent_queue: Queue = None
         self._child_queue: Queue = None
         self._queue_check_interval: float = 0.0
-        self.mid_prices: List[Decimal] = []
+        self._mid_price: Decimal = Decimal("0")
         self.pmm_parameters: PMMParameters = None
         # all_total_balances stores balances in {exchange: {token: balance}} format
         # for example {"binance": {"BTC": Decimal("0.1"), "ETH": Decimal("20"}}
@@ -37,7 +37,7 @@ class ScriptBase:
         """
         The current market mid price (the average of top bid and top ask)
         """
-        return self.mid_prices[-1]
+        return self._mid_price
 
     async def run(self):
         asyncio.ensure_future(self.listen_to_parent())
@@ -54,7 +54,7 @@ class ScriptBase:
                 asyncio.get_event_loop().stop()
                 break
             if isinstance(item, OnTick):
-                self.mid_prices.append(item.mid_price)
+                self._mid_price = item.mid_price
                 self.pmm_parameters = item.pmm_parameters
                 self.all_total_balances = item.all_total_balances
                 self.on_tick()
@@ -106,63 +106,6 @@ class ScriptBase:
         Force an order refresh cycle to occur
         """
         self._child_queue.put(CallForceRefresh())
-
-    def avg_mid_price(self, interval: int, length: int) -> Optional[Decimal]:
-        """
-        Calculates average (mean) of the stored mid prices.
-        Mid prices are stored for each tick (second).
-        Examples: To get the average of the last 100 minutes mid prices = avg_mid_price(60, 100)
-        :param interval: The interval (in seconds) in which to sample the mid prices.
-        :param length: The number of the samples to calculate the average.
-        :returns None if there is not enough samples, otherwise the average mid price.
-        """
-        samples = self.take_samples(self.mid_prices, interval, length)
-        if samples is None:
-            return None
-        return mean(samples)
-
-    def avg_price_volatility(self, interval: int, length: int) -> Optional[Decimal]:
-        """
-        Calculates average (mean) price volatility, volatility is a price change compared to the previous
-        cycle regardless of its direction, e.g. if price changes -3% (or 3%), the volatility is 3%.
-        Examples: To get the average of the last 10 changes on a minute interval = avg_price_volatility(60, 10)
-        :param interval: The interval (in seconds) in which to sample the mid prices.
-        :param length: The number of the samples to calculate the average.
-        :returns None if there is not enough samples, otherwise the average mid price change.
-        """
-        return self.locate_central_price_volatility(interval, length, mean)
-
-    def median_price_volatility(self, interval: int, length: int) -> Optional[Decimal]:
-        """
-        Calculates the median (middle value) price volatility, volatility is a price change compared to the previous
-        cycle regardless of its direction, e.g. if price changes -3% (or 3%), the volatility is 3%.
-        Examples: To get the median of the last 10 changes on a minute interval = median_price_volatility(60, 10)
-        :param interval: The interval (in seconds) in which to sample the mid prices.
-        :param length: The number of the samples to calculate the average.
-        :returns None if there is not enough samples, otherwise the median mid price change.
-        """
-        return self.locate_central_price_volatility(interval, length, median)
-
-    def locate_central_price_volatility(self, interval: int, length: int, locate_function: Callable) \
-            -> Optional[Decimal]:
-        """
-        Calculates central location of the price volatility, volatility is a price change compared to the previous cycle
-        regardless of its direction, e.g. if price changes -3% (or 3%), the volatility is 3%.
-        Examples: To get mean of the last 10 changes on a minute interval locate_central_price_volatility(60, 10, mean)
-        :param interval: The interval in which to sample the mid prices.
-        :param length: The number of the samples.
-        :param locate_function: The function used to calculate the central location, e.g. mean, median, geometric_mean
-         and many more which are supported by statistics library.
-        :returns None if there is not enough samples, otherwise the central location of mid price change.
-        """
-        # We need sample size of length + 1, as we need a previous value to calculate the change
-        samples = self.take_samples(self.mid_prices, interval, length + 1)
-        if samples is None:
-            return None
-        changes = []
-        for index in range(1, len(samples)):
-            changes.append(abs(samples[index] - samples[index - 1]) / samples[index - 1])
-        return locate_function(changes)
 
     @staticmethod
     def round_by_step(a_number: Decimal, step_size: Decimal):

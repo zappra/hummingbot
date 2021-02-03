@@ -280,6 +280,15 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         self._last_params_update_timestamp = self._current_timestamp
 
     @property
+    def minimum_spread(self) -> Decimal:
+        return self._minimum_spread
+
+    @minimum_spread.setter
+    def minimum_spread(self, value: Decimal):
+        self._minimum_spread = value
+        self._last_params_update_timestamp = self._current_timestamp
+
+    @property
     def order_optimization_enabled(self) -> bool:
         return self._order_optimization_enabled
 
@@ -724,7 +733,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                         if use_absolute_price is True:
                             price = Decimal(str(value[1]))
                         else:
-                            price = self.get_price() * (Decimal("1") - Decimal(str(value[1])) / Decimal("100"))
+                            price = self.get_price() * (Decimal("1") + Decimal(str(value[1])) / Decimal("100"))
                         price = market.c_quantize_order_price(self.trading_pair, price)
                         size = Decimal(str(value[2]))
                         size = market.c_quantize_order_amount(self.trading_pair, size)
@@ -1121,15 +1130,26 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         cdef:
             list active_orders = self.market_info_to_active_orders.get(self._market_info, [])
             object price = self.get_price()
+            int num_buys = 0
+            int num_sells = 0
         active_orders = [order for order in active_orders
                          if order.client_order_id not in self._hanging_order_ids]
+
+        # count number of buy and sell orders
+        for order in active_orders:
+            if order.is_buy:
+                num_buys += 1
+            else:
+                num_sells += 1
+
         for order in active_orders:
             negation = -1 if order.is_buy else 1
             if (negation * (order.price - price) / price) < self._minimum_spread:
-                self.logger().info(f"Order is below minimum spread ({self._minimum_spread})."
-                                   f" Cancelling Order: ({'Buy' if order.is_buy else 'Sell'}) "
-                                   f"ID - {order.client_order_id}")
-                self.c_cancel_order(self._market_info, order.client_order_id)
+                if (order.is_buy and num_buys > 1) or (not order.is_buy and num_sells > 1):
+                    self.logger().info(f"Order is below minimum spread ({self._minimum_spread})."
+                                    f" Cancelling Order: ({'Buy' if order.is_buy else 'Sell'}) "
+                                    f"ID - {order.client_order_id}")
+                    self.c_cancel_order(self._market_info, order.client_order_id)
 
     cdef bint c_to_create_orders(self, object proposal):
         return self._create_timestamp < self._current_timestamp and \
