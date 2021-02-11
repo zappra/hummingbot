@@ -3,7 +3,7 @@
 #################################
 
 # For more detailed information: https://docs.hummingbot.io
-template_version: 11
+template_version: 12
 
 # Exchange configs
 bamboo_relay_use_coordinator: false
@@ -128,4 +128,18 @@ script_file_path: null
 #     USDT: 1000
 balance_asset_limit:
   binance:
+
+# Command Shortcuts
+# Define abbreviations for often used commands
+# or batch grouped commands together
+# eg.
+# command_shortcuts:
+# - spread_shortcut:
+#   command: 'spreads'  
+#   arguments: [2, 'Bid Spread', 'Ask Spread']
+#   output:
+#   - 'config bid_spread $1'
+#   - 'config ask_spread $2'
+#
+command_shortcuts: []
 

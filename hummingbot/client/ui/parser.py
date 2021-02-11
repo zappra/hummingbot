@@ -35,7 +35,7 @@ class ThrowingArgumentParser(argparse.ArgumentParser):
         return filtered
 
 
-def load_parser(hummingbot) -> ThrowingArgumentParser:
+def load_parser(hummingbot, shortcuts) -> ThrowingArgumentParser:
     parser = ThrowingArgumentParser(prog="", add_help=False)
     subparsers = parser.add_subparsers()
 
@@ -107,5 +107,13 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     script_parser.add_argument("cmd", nargs="?", default=None, help="Command")
     script_parser.add_argument("args", nargs="*", default=None, help="Arguments")
     script_parser.set_defaults(func=hummingbot.script_command)
+
+    for shortcut in shortcuts:
+        help_str = shortcut['help']
+        command = shortcut['command']
+        shortcut_parser = subparsers.add_parser(command, help=help_str)
+        args = shortcut['arguments']
+        for i in range(1, len(args)):
+            shortcut_parser.add_argument(f'${i}', help=args[i])
 
     return parser

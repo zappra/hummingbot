@@ -65,7 +65,8 @@ class HummingbotApplication(*commands):
 
     def __init__(self):
         self.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
-        self.parser: ThrowingArgumentParser = load_parser(self)
+        shortcuts = global_config_map.get("command_shortcuts").value
+        self.parser: ThrowingArgumentParser = load_parser(self, shortcuts)
         self.app = HummingbotCLI(
             input_handler=self._handle_command, bindings=load_key_bindings(self), completer=load_completer(self)
         )
@@ -114,7 +115,7 @@ class HummingbotApplication(*commands):
         try:
             f = open(image, 'rb')
         except:
-            _notify(f'Could not open {image}')
+            self._notify(f'Could not open {image}')
             return
 
         for notifier in self.notifiers:
@@ -126,17 +127,41 @@ class HummingbotApplication(*commands):
             self.app.to_stop_config = False
 
         raw_command = raw_command.lower().strip()
+        command_split = raw_command.split()
         try:
             if self.placeholder_mode:
                 pass
             else:
-                args = self.parser.parse_args(args=raw_command.split())
-                kwargs = vars(args)
-                if not hasattr(args, "func"):
-                    return
-                f = args.func
-                del kwargs["func"]
-                f(**kwargs)
+                shortcuts = global_config_map.get("command_shortcuts").value
+                shortcut = None
+                # see if we match against shortcut command
+                for s in shortcuts:
+                    if command_split[0] == s['command']:
+                        shortcut = s
+                        break
+
+                # perform shortcut expansion
+                if shortcut is not None:
+                    # check number of arguments
+                    num_shortcut_args = shortcut['arguments'][0]
+                    if len(command_split) == num_shortcut_args + 1:
+                        for output_cmd in shortcut['output']:
+                            final_cmd = output_cmd
+                            for i in range(1, num_shortcut_args+1):
+                                final_cmd = final_cmd.replace(f'${i}', command_split[i])
+                            self._notify(f'  >>> {final_cmd}')
+                            self._handle_command(final_cmd)
+                    else:
+                        self._notify(f'Invalid number of arguments for shortcut')
+                # regular command
+                else:
+                    args = self.parser.parse_args(args=command_split)
+                    kwargs = vars(args)
+                    if not hasattr(args, "func"):
+                        return
+                    f = args.func
+                    del kwargs["func"]
+                    f(**kwargs)
         except InvalidCommandError as e:
             self._notify("Invalid command: %s" % (str(e),))
         except ArgumentParserError as e:

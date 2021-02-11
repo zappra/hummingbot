@@ -269,6 +269,12 @@ main_config_map = {
                   required_if=lambda: False,
                   type_str="json",
                   default={exchange: None for exchange in settings.EXCHANGES}),
+    "command_shortcuts":
+        ConfigVar(key="command_shortcuts",
+                  prompt=None,
+                  required_if=lambda: False,
+                  type_str="json"),
+
 }
 
 global_config_map = {**key_config_map, **main_config_map}
