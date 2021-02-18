@@ -149,7 +149,7 @@ cdef class StrategyBase(TimeIterator):
             object bid_price
             object ask_price
             list markets_data = []
-            list markets_columns = ["Exchange", "Market", "Best Bid Price", "Best Ask Price", "Mid Price"]
+            list markets_columns = ["Exchange", "Market", "Bid", "Ask", "Mid"]
         try:
             for market_trading_pair_tuple in market_trading_pair_tuples:
                 market, trading_pair, base_asset, quote_asset = market_trading_pair_tuple
@@ -178,7 +178,7 @@ cdef class StrategyBase(TimeIterator):
             double base_asset_conversion_rate
             double quote_asset_conversion_rate
             list assets_data = []
-            list assets_columns = ["Exchange", "Asset", "Total Balance", "Available Balance"]
+            list assets_columns = ["Exchange", "Asset", "Total", "Available"]
         try:
             for market_trading_pair_tuple in market_trading_pair_tuples:
                 market, trading_pair, base_asset, quote_asset = market_trading_pair_tuple

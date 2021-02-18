@@ -5,8 +5,11 @@ from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
-from .script_interface import OnTick, OnStatus, PMMParameters, CallNotify, CallLog, PmmMarketInfo, ScriptError
+
+from .script_interface import OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage
+from .script_interface import CallLog, CallStop, CallForceRefresh, PmmMarketInfo, ScriptError
 from hummingbot.core.event.events import (
+    OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent
 )
@@ -63,13 +66,20 @@ class ScriptBase:
                     self.all_total_balances = item.all_total_balances
                     self.all_available_balances = item.all_available_balances
                     self.on_tick()
+                elif isinstance(item, OrderFilledEvent):
+                    self.on_order_filled(item)
                 elif isinstance(item, BuyOrderCompletedEvent):
                     self.on_buy_order_completed(item)
                 elif isinstance(item, SellOrderCompletedEvent):
                     self.on_sell_order_completed(item)
                 elif isinstance(item, OnStatus):
                     status_msg = self.on_status()
-                    self.notify(f"Script status: {status_msg}")
+                    if status_msg:
+                        self.notify(f"Script status: {status_msg}")
+                elif isinstance(item, OnCommand):
+                    self.on_command(item.cmd, item.args)
+                elif isinstance(item, OnRefresh):
+                    self.on_order_refresh()
                 elif isinstance(item, PmmMarketInfo):
                     self.pmm_market_info = item
             except asyncio.CancelledError:
@@ -88,12 +98,31 @@ class ScriptBase:
         """
         self._child_queue.put(CallNotify(msg))
 
+    def send_image(self, image: str):
+        """
+        Send image via notifiers
+        """
+        self._child_queue.put(CallSendImage(image))
+
     def log(self, msg: str):
         """
         Logs message to the strategy log file and display it on Running Logs section of HB.
         :param msg: The message.
         """
         self._child_queue.put(CallLog(msg))
+
+    def request_stop(self, reason: str):
+        """
+        Request stop command on main strategy in the event of error or custom kill switch type condition
+        :param reason: Reason, which will be logged by main application
+        """
+        self._child_queue.put(CallStop(reason))
+
+    def force_order_refresh(self):
+        """
+        Force an order refresh cycle to occur
+        """
+        self._child_queue.put(CallForceRefresh())
 
     def avg_mid_price(self, interval: int, length: int) -> Optional[Decimal]:
         """
@@ -191,6 +220,12 @@ class ScriptBase:
         """
         pass
 
+    def on_order_filled(self, event: OrderFilledEvent):
+        """
+        Called when order is filled
+        """
+        pass
+
     def on_buy_order_completed(self, event: BuyOrderCompletedEvent):
         """
         Is called upon a buy order is completely filled.
@@ -212,3 +247,16 @@ class ScriptBase:
         :returns status message.
         """
         return f"{self.__class__.__name__} is active."
+
+    def on_command(self, cmd: str, args: List[str]):
+        """
+        Called when 'script' command is issued on the Hummingbot application
+        """
+        pass
+
+    def on_order_refresh(self):
+        """
+        Called when order cycle is refreshing
+        TODO: default implementation should make some parameter change such that main process won't stall
+        """
+        pass

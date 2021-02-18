@@ -213,7 +213,7 @@ cdef class PaperTradeExchange(ExchangeBase):
 
     @property
     def display_name(self) -> str:
-        return f"{self._order_book_tracker.exchange_name}_PaperTrade"
+        return f"Paper"
 
     @property
     def order_books(self) -> Dict[str, CompositeOrderBook]:

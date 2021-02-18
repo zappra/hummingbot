@@ -3,7 +3,7 @@
 #################################
 
 # For more detailed information: https://docs.hummingbot.io
-template_version: 17
+template_version: 19
 
 # Exchange configs
 bamboo_relay_use_coordinator: false
@@ -180,3 +180,75 @@ heartbeat_enabled:
 heartbeat_interval_min:
 # a list of binance markets (for trades/pnl reporting) separated by ',' e.g. RLC-USDT,RLC-BTC
 binance_markets:
+  
+# Command Shortcuts
+# Define abbreviations for often used commands
+# or batch grouped commands together
+# eg.
+# command_shortcuts:
+#   - command: 'spreads'
+#     help: 'Set bid and ask spread'  
+#     arguments: [2, 'Bid Spread', 'Ask Spread']
+#     output: ['config bid_spread $1', 'config ask_spread $2']
+#
+command_shortcuts:
+  - command: inventory
+    help: Verbose inventory report
+    arguments: []
+    output: [script inventory]
+  - command: recent
+    help: Display recent buy/sell fill history
+    arguments: []
+    output: [script inventory recent]
+  - command: fill
+    help: Explcit fill command for correcting missing events
+    arguments: [Side (buy/sell), Amount, Price]
+    output: [script inventory fill $1 $2 $3]
+  - command: combine
+    help: Combine inventory items into one
+    arguments: [Low price, High Price]
+    output: [script inventory combine $1 $2]
+  - command: dumpl
+    help: Sell inventory at a loss
+    arguments: [Base amount to dump]
+    output: [script inventory dumpl $1]
+  - command: dumpp
+    help: Sell inventory with profit
+    arguments: [Base amount to dump]
+    output: [script inventory dumpp $1]
+  - command: sconf
+    help: Dump script config
+    arguments: []
+    output: [script config]
+  - command: bid
+    help: Set script bid spread
+    arguments: [Bid spread]
+    output: [script config bid_spread $1]
+  - command: order
+    help: Set script order amount
+    arguments: [Order amount]
+    output: [script config order_amount $1]
+  - command: plot24
+    help: 24 hour plot
+    arguments: []
+    output: [script plot 24]
+  - command: plot
+    help: Default plot
+    arguments: []
+    output: [script plot]
+  - command: plotsys
+    help: System plot
+    arguments: []
+    output: [script plotsys]
+  - command: refresh
+    help: Force order refresh cycle
+    arguments: []
+    output: [script refresh]
+  - command: pause
+    help: Pause trading
+    arguments: []
+    output: [script pause]
+  - command: resume
+    help: Resume trading
+    arguments: []
+    output: [script resume]

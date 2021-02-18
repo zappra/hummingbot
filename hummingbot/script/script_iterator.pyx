@@ -9,6 +9,7 @@ from hummingbot.core.clock cimport Clock
 from hummingbot.core.clock import Clock
 from hummingbot.strategy.pure_market_making import PureMarketMakingStrategy
 from hummingbot.core.event.events import (
+    OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent,
     MarketEvent,
@@ -22,8 +23,13 @@ from hummingbot.script.script_interface import (
     PMMParameters,
     OnTick,
     OnStatus,
+    OnRefresh,
+    OnCommand,
     CallNotify,
+    CallSendImage,
     CallLog,
+    CallStop,
+    CallForceRefresh,
     PmmMarketInfo,
     ScriptError,
 )
@@ -51,9 +57,11 @@ cdef class ScriptIterator(TimeIterator):
         self._strategy = strategy
         self._is_unit_testing_mode = is_unit_testing_mode
         self._queue_check_interval = queue_check_interval
+        self._order_filled_forwarder = SourceInfoEventForwarder(self._order_filled)
         self._did_complete_buy_order_forwarder = SourceInfoEventForwarder(self._did_complete_buy_order)
         self._did_complete_sell_order_forwarder = SourceInfoEventForwarder(self._did_complete_sell_order)
         self._event_pairs = [
+            (MarketEvent.OrderFilled, self._order_filled_forwarder),
             (MarketEvent.BuyOrderCompleted, self._did_complete_buy_order_forwarder),
             (MarketEvent.SellOrderCompleted, self._did_complete_sell_order_forwarder)
         ]
@@ -102,6 +110,12 @@ cdef class ScriptIterator(TimeIterator):
                                      self.all_total_balances(), self.all_available_balances())
         self._parent_queue.put(on_tick)
 
+    def _order_filled(self,
+                      event_tag: int,
+                      market: ExchangeBase,
+                      event: OrderFilledEvent):
+        self._parent_queue.put(event)
+
     def _did_complete_buy_order(self,
                                 event_tag: int,
                                 market: ExchangeBase,
@@ -121,15 +135,28 @@ cdef class ScriptIterator(TimeIterator):
                     await asyncio.sleep(self._queue_check_interval)
                     continue
                 item = self._child_queue.get()
-                self.logger().info(f"received: {str(item)}")
                 if item is None:
                     break
                 if isinstance(item, StrategyParameter):
+                    self.logger().info(f"received: {str(item)}")
                     setattr(self._strategy, item.name, item.updated_value)
                 elif isinstance(item, CallNotify) and not self._is_unit_testing_mode:
                     # ignore this on unit testing as the below import will mess up unit testing.
                     from hummingbot.client.hummingbot_application import HummingbotApplication
                     HummingbotApplication.main_application()._notify(item.msg)
+                elif isinstance(item, CallSendImage) and not self._is_unit_testing_mode:
+                    # ignore this on unit testing as the below import will mess up unit testing.
+                    from hummingbot.client.hummingbot_application import HummingbotApplication
+                    HummingbotApplication.main_application()._send_image(item.msg)
+                elif isinstance(item, CallStop) and not self._is_unit_testing_mode:
+                    msg = 'Stop request has been received from script\n'
+                    msg += f"Reason: {item.msg}"
+                    from hummingbot.client.hummingbot_application import HummingbotApplication
+                    hb = HummingbotApplication.main_application()
+                    hb._notify(msg)
+                    hb.stop()
+                elif isinstance(item, CallForceRefresh):
+                    self._strategy.force_order_refresh()
                 elif isinstance(item, CallLog):
                     self.logger().info(f"script - {item.msg}")
                 elif isinstance(item, ScriptError):
@@ -141,6 +168,13 @@ cdef class ScriptIterator(TimeIterator):
 
     def request_status(self):
         self._parent_queue.put(OnStatus())
+
+    def request_command(self, cmd: str, args: List[str]):
+        self._parent_queue.put(OnCommand(cmd, args))
+
+    def request_updated_parameters(self):
+        self.logger().info(f"sending: request_updated_parameters")
+        self._parent_queue.put(OnRefresh())
 
     def all_total_balances(self):
         all_bals = {m.name: m.get_all_balances() for m in self._markets}

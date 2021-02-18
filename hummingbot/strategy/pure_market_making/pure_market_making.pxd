@@ -54,6 +54,8 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         object _last_own_trade_price
         list _hanging_aged_order_prices
 
+        bint _script_order_refresh_called
+        double _last_params_update_timestamp
     cdef object c_get_mid_price(self)
     cdef object c_create_base_proposal(self)
     cdef tuple c_get_adjusted_available_balance(self, list orders)
@@ -74,5 +76,5 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     cdef c_cancel_orders_below_min_spread(self)
     cdef c_aged_order_refresh(self)
     cdef bint c_to_create_orders(self, object proposal)
-    cdef c_execute_orders_proposal(self, object proposal)
+    cdef bint c_execute_orders_proposal(self, object proposal)
     cdef set_timers(self)

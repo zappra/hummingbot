@@ -153,12 +153,17 @@ class TelegramNotifier(NotifierBase):
         for chunk in msg_chunks:
             self._msg_queue.put_nowait("\n".join(chunk))
 
+    def add_file_to_queue(self, f):
+        self._msg_queue.put_nowait(f)
+
     async def send_msg_from_queue(self):
         while True:
             try:
-                new_msg: str = await self._msg_queue.get()
+                new_msg = await self._msg_queue.get()
                 if isinstance(new_msg, str) and len(new_msg) > 0:
                     await self.send_msg_async(new_msg)
+                else:
+                    await self.send_photo_async(new_msg)
             except Exception as e:
                 self.logger().error(str(e))
             await asyncio.sleep(1)
@@ -198,4 +203,27 @@ class TelegramNotifier(NotifierBase):
                 ))
         except TelegramError as telegram_err:
             self.logger().network(f"TelegramError: {telegram_err.message}! Giving up on that message.",
+                                  exc_info=True)
+
+    async def send_photo_async(self, photo, bot: Bot = None) -> None:
+        """
+        Send photo
+        """
+        bot = bot or self._updater.bot
+
+        try:
+            try:
+                await self._async_call_scheduler.call_async(lambda: bot.send_photo(
+                    self._chat_id,
+                    photo))
+            except NetworkError as network_err:
+                # Sometimes the telegram server resets the current connection,
+                # if this is the case we send the message again.
+                self.logger().network(f"Telegram NetworkError: {network_err.message}! Trying one more time",
+                                      exc_info=True)
+                await self._async_call_scheduler.call_async(lambda: bot.send_photo(
+                    self._chat_id,
+                    photo))
+        except TelegramError as telegram_err:
+            self.logger().network(f"TelegramError: {telegram_err.message}! Giving up on that photo.",
                                   exc_info=True)

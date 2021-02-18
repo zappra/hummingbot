@@ -1,7 +1,8 @@
-from typing import Dict
+from typing import Dict, List
 from decimal import Decimal
 
 child_queue = None
+force_updates = False
 
 
 def set_child_queue(queue):
@@ -24,14 +25,20 @@ class StrategyParameter(object):
 
     def __set__(self, obj, value):
         global child_queue
+        global force_updates
         old_value = getattr(obj, self.attr)
-        if old_value is not None and old_value != value:
+        if (old_value is not None and old_value != value) or force_updates is True:
             self.updated_value = value
             child_queue.put(self)
         setattr(obj, self.attr, value)
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+    @staticmethod
+    def set_force_updates(force: bool):
+        global force_updates
+        force_updates = force
 
 
 class PMMParameters:
@@ -45,6 +52,7 @@ class PMMParameters:
         self._order_levels = None
         self._bid_spread = None
         self._ask_spread = None
+        self._minimum_spread = None
         self._order_amount = None
         self._order_level_spread = None
         self._order_level_amount = None
@@ -53,13 +61,12 @@ class PMMParameters:
         self._filled_order_delay = None
         self._hanging_orders_enabled = None
         self._hanging_orders_cancel_pct = None
-
-        # These below parameters are yet to open for the script
-
         self._inventory_skew_enabled = None
         self._inventory_target_base_pct = None
         self._inventory_range_multiplier = None
         self._order_override = None
+
+        # These below parameters are yet to open for the script
 
         # self._order_optimization_enabled = None
         # self._ask_order_optimization_depth = None
@@ -68,13 +75,13 @@ class PMMParameters:
         # self._price_ceiling = None
         # self._price_floor = None
         # self._ping_pong_enabled = None
-        # self._minimum_spread = None
 
     buy_levels = StrategyParameter("buy_levels")
     sell_levels = StrategyParameter("sell_levels")
     order_levels = StrategyParameter("order_levels")
     bid_spread = StrategyParameter("bid_spread")
     ask_spread = StrategyParameter("ask_spread")
+    minimum_spread = StrategyParameter("minimum_spread")
     order_amount = StrategyParameter("order_amount")
     order_level_spread = StrategyParameter("order_level_spread")
     order_level_amount = StrategyParameter("order_level_amount")
@@ -83,7 +90,6 @@ class PMMParameters:
     filled_order_delay = StrategyParameter("filled_order_delay")
     hanging_orders_enabled = StrategyParameter("hanging_orders_enabled")
     hanging_orders_cancel_pct = StrategyParameter("hanging_orders_cancel_pct")
-
     inventory_skew_enabled = StrategyParameter("inventory_skew_enabled")
     inventory_target_base_pct = StrategyParameter("inventory_target_base_pct")
     inventory_range_multiplier = StrategyParameter("inventory_range_multiplier")
@@ -96,7 +102,6 @@ class PMMParameters:
     # price_ceiling = PMMParameter("price_ceiling")
     # price_floor = PMMParameter("price_floor")
     # ping_pong_enabled = PMMParameter("ping_pong_enabled")
-    # minimum_spread = PMMParameter("minimum_spread")
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
@@ -131,7 +136,28 @@ class OnStatus:
     pass
 
 
+class OnRefresh:
+    pass
+
+
+class OnCommand:
+    def __init__(self, cmd: str, args: List[str]):
+        self.cmd = cmd
+        self.args = args
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+
 class CallNotify:
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+
+class CallSendImage:
     def __init__(self, msg):
         self.msg = msg
 
@@ -147,6 +173,14 @@ class CallLog:
         return f"{self.__class__.__name__} {str(self.__dict__)}"
 
 
+class CallStop:
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+
 class ScriptError:
     def __init__(self, error: Exception, traceback: str):
         self.error = error
@@ -154,3 +188,7 @@ class ScriptError:
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.error)} \nTrace back: {self.traceback}"
+
+
+class CallForceRefresh:
+    pass
