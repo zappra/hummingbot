@@ -28,6 +28,7 @@ class StopCommand:
 
         if self._script_iterator is not None:
             self._script_iterator.stop(self.clock)
+            self._script_iterator = None
 
         if self._trading_required and not skip_order_cancellation:
             # Remove the strategy from clock before cancelling orders, to
