@@ -7,7 +7,7 @@ from statistics import mean, median
 from operator import itemgetter
 
 from .script_interface import OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage
-from .script_interface import CallLog, CallStop, CallForceRefresh, PmmMarketInfo, ScriptError
+from .script_interface import CallLog, CallStop, CallForceRefresh, OrderRefreshComplete, PmmMarketInfo, ScriptError
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
@@ -79,7 +79,10 @@ class ScriptBase:
                 elif isinstance(item, OnCommand):
                     self.on_command(item.cmd, item.args)
                 elif isinstance(item, OnRefresh):
+                    # this will push any changed parameters onto the queue
                     self.on_order_refresh()
+                    # followed by notification that refresh is complete
+                    self._child_queue.put(OrderRefreshComplete())
                 elif isinstance(item, PmmMarketInfo):
                     self.pmm_market_info = item
             except asyncio.CancelledError:

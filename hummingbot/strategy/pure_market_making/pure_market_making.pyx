@@ -147,8 +147,8 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         self._hanging_order_ids = []
         self._logging_options = logging_options
         self._last_timestamp = 0
-        self._script_order_refresh_called = False
-        self._last_params_update_timestamp = 0
+        self._script_order_refresh_pending = True
+        self._last_order_refresh_complete_timestamp = 0
         self._status_report_interval = status_report_interval
         self._last_own_trade_price = Decimal('nan')
 
@@ -168,7 +168,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_refresh_tolerance_pct.setter
     def order_refresh_tolerance_pct(self, value: Decimal):
         self._order_refresh_tolerance_pct = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def order_amount(self) -> Decimal:
@@ -177,7 +176,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_amount.setter
     def order_amount(self, value: Decimal):
         self._order_amount = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def order_levels(self) -> int:
@@ -188,7 +186,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         self._order_levels = value
         self._buy_levels = value
         self._sell_levels = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def buy_levels(self) -> int:
@@ -197,7 +194,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @buy_levels.setter
     def buy_levels(self, value: int):
         self._buy_levels = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def sell_levels(self) -> int:
@@ -206,7 +202,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @sell_levels.setter
     def sell_levels(self, value: int):
         self._sell_levels = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def order_level_amount(self) -> Decimal:
@@ -215,7 +210,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_level_amount.setter
     def order_level_amount(self, value: Decimal):
         self._order_level_amount = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def order_level_spread(self) -> Decimal:
@@ -224,7 +218,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_level_spread.setter
     def order_level_spread(self, value: Decimal):
         self._order_level_spread = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def inventory_skew_enabled(self) -> bool:
@@ -233,7 +226,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @inventory_skew_enabled.setter
     def inventory_skew_enabled(self, value: bool):
         self._inventory_skew_enabled = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def inventory_target_base_pct(self) -> Decimal:
@@ -242,7 +234,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @inventory_target_base_pct.setter
     def inventory_target_base_pct(self, value: Decimal):
         self._inventory_target_base_pct = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def inventory_range_multiplier(self) -> Decimal:
@@ -251,7 +242,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @inventory_range_multiplier.setter
     def inventory_range_multiplier(self, value: Decimal):
         self._inventory_range_multiplier = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def hanging_orders_enabled(self) -> bool:
@@ -260,7 +250,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @hanging_orders_enabled.setter
     def hanging_orders_enabled(self, value: bool):
         self._hanging_orders_enabled = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def hanging_orders_cancel_pct(self) -> Decimal:
@@ -269,7 +258,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @hanging_orders_cancel_pct.setter
     def hanging_orders_cancel_pct(self, value: Decimal):
         self._hanging_orders_cancel_pct = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def bid_spread(self) -> Decimal:
@@ -278,7 +266,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @bid_spread.setter
     def bid_spread(self, value: Decimal):
         self._bid_spread = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def ask_spread(self) -> Decimal:
@@ -287,7 +274,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @ask_spread.setter
     def ask_spread(self, value: Decimal):
         self._ask_spread = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def minimum_spread(self) -> Decimal:
@@ -296,7 +282,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @minimum_spread.setter
     def minimum_spread(self, value: Decimal):
         self._minimum_spread = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def order_optimization_enabled(self) -> bool:
@@ -305,7 +290,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_optimization_enabled.setter
     def order_optimization_enabled(self, value: bool):
         self._order_optimization_enabled = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def order_refresh_time(self) -> float:
@@ -314,7 +298,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_refresh_time.setter
     def order_refresh_time(self, value: float):
         self._order_refresh_time = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def filled_order_delay(self) -> float:
@@ -323,7 +306,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @filled_order_delay.setter
     def filled_order_delay(self, value: float):
         self._filled_order_delay = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def filled_order_delay(self) -> float:
@@ -332,7 +314,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @filled_order_delay.setter
     def filled_order_delay(self, value: float):
         self._filled_order_delay = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def add_transaction_costs_to_orders(self) -> bool:
@@ -341,7 +322,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @add_transaction_costs_to_orders.setter
     def add_transaction_costs_to_orders(self, value: bool):
         self._add_transaction_costs_to_orders = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def price_ceiling(self) -> Decimal:
@@ -350,7 +330,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @price_ceiling.setter
     def price_ceiling(self, value: Decimal):
         self._price_ceiling = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def price_floor(self) -> Decimal:
@@ -359,7 +338,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @price_floor.setter
     def price_floor(self, value: Decimal):
         self._price_floor = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     @property
     def base_asset(self):
@@ -380,7 +358,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_override.setter
     def order_override(self, value: Dict[str, List[str]]):
         self._order_override = value
-        self._last_params_update_timestamp = self._current_timestamp
 
     def get_price(self) -> float:
         price_provider = self._asset_price_delegate or self._market_info
@@ -706,12 +683,13 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             if self._create_timestamp == 0:
                 warmup = 10
                 self.notify_hb_app(f"Setting initial warmup period of {warmup} seconds")
-                self._create_timestamp = self._current_timestamp + warmup
+                self.set_create_timestamp(self._current_timestamp + warmup)
 
             if self._create_timestamp <= self._current_timestamp:
                 # 1. Ensure script had updated PMM params
                 self.call_script_parameter_refresh()
-                if self._last_params_update_timestamp >= self._create_timestamp:
+                # need to have completed order refresh after the creation time
+                if self._last_order_refresh_complete_timestamp >= self._create_timestamp:
                     # 2. Create base order proposals
                     proposal = self.c_create_base_proposal()
                     # 3. Apply functions that limit numbers of buys and sells proposal
@@ -1068,7 +1046,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 return
 
         # delay order creation by filled_order_dalay (in seconds)
-        self._create_timestamp = self._current_timestamp + self._filled_order_delay
+        self.set_create_timestamp(self._current_timestamp + self._filled_order_delay)
         self._cancel_timestamp = min(self._cancel_timestamp, self._create_timestamp)
 
         if self._hanging_orders_enabled:
@@ -1112,7 +1090,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 return
 
         # delay order creation by filled_order_dalay (in seconds)
-        self._create_timestamp = self._current_timestamp + self._filled_order_delay
+        self.set_create_timestamp(self._current_timestamp + self._filled_order_delay)
         self._cancel_timestamp = min(self._cancel_timestamp, self._create_timestamp)
 
         if self._hanging_orders_enabled:
@@ -1256,9 +1234,16 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         return Proposal(buys, sells)
 
     cdef bint c_to_create_orders(self, object proposal):
-        return self._create_timestamp < self._current_timestamp and \
-            proposal is not None and \
-            len(self.active_non_hanging_orders) == 0
+        if self._create_timestamp < self._current_timestamp and \
+                proposal is not None and \
+                len(self.active_non_hanging_orders) == 0:
+            return True
+
+        if self._create_timestamp < self._current_timestamp and \
+                proposal is not None and len(self.active_non_hanging_orders) > 0:
+            self.logger().info('Not creating orders due to pending cancels')
+
+        return False
 
     cdef bint c_execute_orders_proposal(self, object proposal):
         cdef:
@@ -1321,15 +1306,25 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     cdef set_timers(self):
         cdef double next_cycle = self._current_timestamp + self._order_refresh_time
         if self._create_timestamp <= self._current_timestamp:
-            self._create_timestamp = next_cycle
-            self._script_order_refresh_called = False
+            self.set_create_timestamp(next_cycle)
         if self._cancel_timestamp <= self._current_timestamp:
             self._cancel_timestamp = min(self._create_timestamp, next_cycle)
 
+    def set_create_timestamp(self, ts):
+        # any time we set a new order create time we trigger a script order refresh
+        self.logger().info(f'Setting create timestamp to {ts}')
+        self._create_timestamp = ts
+        self._script_order_refresh_pending = True
+
     def force_order_refresh(self):
-        self._create_timestamp = self._current_timestamp
+        # called from scripts to force order refresh cycle
+        self.set_create_timestamp(self._current_timestamp)
         self._cancel_timestamp = self._current_timestamp
-        self._script_order_refresh_called = False
+
+    def order_refresh_complete(self):
+        # called from scripts to indicate all parameters have been set and order processing can continue
+        self.logger().info(f'Order refresh complete')
+        self._last_order_refresh_complete_timestamp = self._current_timestamp
 
     def notify_hb_app(self, msg: str):
         if self._hb_app_notification:
@@ -1338,18 +1333,18 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
     def call_script_parameter_refresh(self):
         # ensure this function is only called once in an order refresh cycle
-        if self._script_order_refresh_called is False:
+        if self._script_order_refresh_pending is True:
             from hummingbot.client.hummingbot_application import HummingbotApplication
             script = HummingbotApplication.main_application()._script_iterator
             # request parameter update from script
-            # params update timestamp will be set as soon as any update is received
             if script is not None:
+                self.logger().info('Calling request update parameters')
                 script.request_updated_parameters()
             else:
-                # if there's no script then mark parameters as updated
-                self._last_params_update_timestamp = self._current_timestamp
+                # if there's no script then mark as complete allowing order processing to continue
+                self._last_order_refresh_complete_timestamp = self._current_timestamp
 
-            self._script_order_refresh_called = True
+            self._script_order_refresh_pending = False
 
     def get_price_type(self, price_type_str: str) -> PriceType:
         if price_type_str == "mid_price":

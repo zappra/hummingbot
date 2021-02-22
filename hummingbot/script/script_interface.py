@@ -2,7 +2,6 @@ from typing import Dict, List
 from decimal import Decimal
 
 child_queue = None
-force_updates = False
 
 
 def set_child_queue(queue):
@@ -25,20 +24,14 @@ class StrategyParameter(object):
 
     def __set__(self, obj, value):
         global child_queue
-        global force_updates
         old_value = getattr(obj, self.attr)
-        if (old_value is not None and old_value != value) or force_updates is True:
+        if (old_value is not None and old_value != value):
             self.updated_value = value
             child_queue.put(self)
         setattr(obj, self.attr, value)
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-    @staticmethod
-    def set_force_updates(force: bool):
-        global force_updates
-        force_updates = force
 
 
 class PMMParameters:
@@ -191,4 +184,8 @@ class ScriptError:
 
 
 class CallForceRefresh:
+    pass
+
+
+class OrderRefreshComplete:
     pass

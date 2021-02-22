@@ -30,6 +30,7 @@ from hummingbot.script.script_interface import (
     CallLog,
     CallStop,
     CallForceRefresh,
+    OrderRefreshComplete,
     PmmMarketInfo,
     ScriptError,
 )
@@ -157,6 +158,8 @@ cdef class ScriptIterator(TimeIterator):
                     hb.stop()
                 elif isinstance(item, CallForceRefresh):
                     self._strategy.force_order_refresh()
+                elif isinstance(item, OrderRefreshComplete):
+                    self._strategy.order_refresh_complete()
                 elif isinstance(item, CallLog):
                     self.logger().info(f"script - {item.msg}")
                 elif isinstance(item, ScriptError):
