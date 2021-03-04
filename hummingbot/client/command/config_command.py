@@ -32,8 +32,17 @@ if TYPE_CHECKING:
     from hummingbot.client.hummingbot_application import HummingbotApplication
 
 
-no_restart_pmm_keys_in_percentage = ["bid_spread", "ask_spread", "minimum_spread", "order_level_spread", "inventory_target_base_pct"]
-no_restart_pmm_keys = ["order_amount", "order_levels", "filled_order_delay", "inventory_skew_enabled", "inventory_range_multiplier"]
+no_restart_pmm_keys_in_percentage = ["bid_spread",
+                                     "ask_spread",
+                                     "minimum_spread",
+                                     "order_level_spread",
+                                     "inventory_target_base_pct"]
+no_restart_pmm_keys = ["order_amount",
+                       "order_levels",
+                       "filled_order_delay",
+                       "inventory_skew_enabled",
+                       "inventory_range_multiplier",
+                       "order_refresh_time"]
 global_configs_to_display = ["0x_active_cancels",
                              "kill_switch_enabled",
                              "kill_switch_rate",
