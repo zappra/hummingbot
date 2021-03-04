@@ -151,7 +151,7 @@ cdef class BinanceExchange(ExchangeBase):
         self._trading_rules_polling_task = None
         self._async_scheduler = AsyncCallScheduler(call_interval=0.5)
         self._last_poll_timestamp = 0
-        self._throttler = Throttler((10.0, 1.0))
+        self._throttler = Throttler((5.0, 5.0))
 
     @property
     def name(self) -> str:
