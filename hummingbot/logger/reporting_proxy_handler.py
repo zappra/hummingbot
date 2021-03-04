@@ -17,7 +17,6 @@ from hummingbot.logger import (
     log_encoder
 )
 from hummingbot.logger.log_server_client import LogServerClient
-from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.client.platform import client_system, installation_type
 
 VERSIONFILE = realpath(join(__file__, "../../VERSION"))
@@ -48,9 +47,9 @@ class ReportingProxyHandler(logging.Handler):
         self._proxy_url: str = proxy_url
         self._log_server_client: Optional[LogServerClient] = None
         self._send_aggregated_metrics_loop_task = None
-        if global_config_map["heartbeat_enabled"].value:
-            self._send_aggregated_metrics_loop_task = safe_ensure_future(
-                self.send_aggregated_metrics_loop(float(global_config_map["heartbeat_interval_min"].value)))
+        # if global_config_map["heartbeat_enabled"].value:
+        #    self._send_aggregated_metrics_loop_task = safe_ensure_future(
+        #        self.send_aggregated_metrics_loop(float(global_config_map["heartbeat_interval_min"].value)))
 
     @property
     def log_server_client(self):

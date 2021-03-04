@@ -19,7 +19,7 @@ from hummingbot.client.ui.layout import (
     create_process_monitor,
     create_trade_monitor
 )
-from hummingbot.client.ui.interface_utils import start_timer, start_process_monitor, start_trade_monitor
+from hummingbot.client.ui.interface_utils import start_timer
 from hummingbot.client.ui.style import load_style
 import logging
 
@@ -66,8 +66,10 @@ class HummingbotCLI:
         # start ui tasks
         loop = asyncio.get_event_loop()
         loop.create_task(start_timer(self.timer))
-        loop.create_task(start_process_monitor(self.process_usage))
-        loop.create_task(start_trade_monitor(self.trade_monitor))
+
+        # disable these
+        # loop.create_task(start_process_monitor(self.process_usage))
+        # loop.create_task(start_trade_monitor(self.trade_monitor))
 
     async def run(self):
         await self.app.run_async()
