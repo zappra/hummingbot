@@ -718,7 +718,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                     self._order_refresh_time = 60.0
                     self.set_timers()
                     self._order_refresh_time = temp_refresh_time
-                    self.logger().info('No orders, try again in 1 minute')
         finally:
             self._last_timestamp = timestamp
 
@@ -1234,16 +1233,8 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         return Proposal(buys, sells)
 
     cdef bint c_to_create_orders(self, object proposal):
-        if self._create_timestamp < self._current_timestamp and \
-                proposal is not None and \
-                len(self.active_non_hanging_orders) == 0:
-            return True
-
-        if self._create_timestamp < self._current_timestamp and \
-                proposal is not None and len(self.active_non_hanging_orders) > 0:
-            self.logger().info('Not creating orders due to pending cancels')
-
-        return False
+        return self._create_timestamp < self._current_timestamp and \
+            proposal is not None and len(self.active_non_hanging_orders) == 0
 
     cdef bint c_execute_orders_proposal(self, object proposal):
         cdef:
@@ -1312,7 +1303,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
     def set_create_timestamp(self, ts):
         # any time we set a new order create time we trigger a script order refresh
-        self.logger().info(f'Setting create timestamp to {ts}')
         self._create_timestamp = ts
         self._script_order_refresh_pending = True
 
@@ -1323,7 +1313,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
     def order_refresh_complete(self):
         # called from scripts to indicate all parameters have been set and order processing can continue
-        self.logger().info(f'Order refresh complete')
         self._last_order_refresh_complete_timestamp = self._current_timestamp
 
     def notify_hb_app(self, msg: str):
@@ -1338,7 +1327,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             script = HummingbotApplication.main_application()._script_iterator
             # request parameter update from script
             if script is not None:
-                self.logger().info('Calling request update parameters')
                 script.request_updated_parameters()
             else:
                 # if there's no script then mark as complete allowing order processing to continue
