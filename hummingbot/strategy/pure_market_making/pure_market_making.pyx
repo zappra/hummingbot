@@ -292,6 +292,22 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         self._order_optimization_enabled = value
 
     @property
+    def bid_order_optimization_depth(self) -> Decimal:
+        return self._bid_order_optimization_depth
+
+    @bid_order_optimization_depth.setter
+    def bid_order_optimization_depth(self, value: Decimal):
+        self._bid_order_optimization_depth = value
+
+    @property
+    def ask_order_optimization_depth(self) -> Decimal:
+        return self._ask_order_optimization_depth
+
+    @ask_order_optimization_depth.setter
+    def ask_order_optimization_depth(self, value: Decimal):
+        self._ask_order_optimization_depth = value
+
+    @property
     def order_refresh_time(self) -> float:
         return self._order_refresh_time
 
@@ -951,13 +967,13 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 self.trading_pair,
                 top_bid_price
             )
-            # Get the price above the top bid
-            price_above_bid = (ceil(top_bid_price / price_quantum) + 1) * price_quantum
+            # Get the price below the top bid
+            price_below_bid = (ceil(top_bid_price / price_quantum) - 1) * price_quantum
 
-            # If the price_above_bid is lower than the price suggested by the top pricing proposal,
+            # If the price_below_bid is lower than the price suggested by the top pricing proposal,
             # lower the price and from there apply the order_level_spread to each order in the next levels
             proposal.buys = sorted(proposal.buys, key = lambda p: p.price, reverse = True)
-            lower_buy_price = min(proposal.buys[0].price, price_above_bid)
+            lower_buy_price = min(proposal.buys[0].price, price_below_bid)
             for i, proposed in enumerate(proposal.buys):
                 proposal.buys[i].price = market.c_quantize_order_price(self.trading_pair, lower_buy_price) * (1 - self.order_level_spread * i)
 
@@ -969,13 +985,13 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 self.trading_pair,
                 top_ask_price
             )
-            # Get the price below the top ask
-            price_below_ask = (floor(top_ask_price / price_quantum) - 1) * price_quantum
+            # Get the price above the top ask
+            price_above_ask = (floor(top_ask_price / price_quantum) + 1) * price_quantum
 
-            # If the price_below_ask is higher than the price suggested by the pricing proposal,
+            # If the price_above_ask is higher than the price suggested by the pricing proposal,
             # increase your price and from there apply the order_level_spread to each order in the next levels
             proposal.sells = sorted(proposal.sells, key = lambda p: p.price)
-            higher_sell_price = max(proposal.sells[0].price, price_below_ask)
+            higher_sell_price = max(proposal.sells[0].price, price_above_ask)
             for i, proposed in enumerate(proposal.sells):
                 proposal.sells[i].price = market.c_quantize_order_price(self.trading_pair, higher_sell_price) * (1 + self.order_level_spread * i)
 
