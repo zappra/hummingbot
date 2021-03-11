@@ -24,7 +24,7 @@ class ScriptBase:
         self._parent_queue: Queue = None
         self._child_queue: Queue = None
         self._queue_check_interval: float = 0.0
-        self.mid_prices: List[Decimal] = []
+        self._mid_price: Decimal = None
         self.pmm_parameters: PMMParameters = None
         self.pmm_market_info: PmmMarketInfo = None
         # all_total_balances stores balances in {exchange: {token: balance}} format
@@ -43,7 +43,7 @@ class ScriptBase:
         """
         The current market mid price (the average of top bid and top ask)
         """
-        return self.mid_prices[-1]
+        return self._mid_price
 
     async def run(self):
         asyncio.ensure_future(self.listen_to_parent())
@@ -61,7 +61,7 @@ class ScriptBase:
                     asyncio.get_event_loop().stop()
                     break
                 if isinstance(item, OnTick):
-                    self.mid_prices.append(item.mid_price)
+                    self._mid_price = item.mid_price
                     self.pmm_parameters = item.pmm_parameters
                     self.all_total_balances = item.all_total_balances
                     self.all_available_balances = item.all_available_balances
@@ -136,10 +136,14 @@ class ScriptBase:
         :param length: The number of the samples to calculate the average.
         :returns None if there is not enough samples, otherwise the average mid price.
         """
+        pass
+
+        """
         samples = self.take_samples(self.mid_prices, interval, length)
         if samples is None:
             return None
         return mean(samples)
+        """
 
     def avg_price_volatility(self, interval: int, length: int) -> Optional[Decimal]:
         """
@@ -175,6 +179,9 @@ class ScriptBase:
          and many more which are supported by statistics library.
         :returns None if there is not enough samples, otherwise the central location of mid price change.
         """
+        pass
+
+        """
         # We need sample size of length + 1, as we need a previous value to calculate the change
         samples = self.take_samples(self.mid_prices, interval, length + 1)
         if samples is None:
@@ -183,6 +190,7 @@ class ScriptBase:
         for index in range(1, len(samples)):
             changes.append(max(samples[index], samples[index - 1]) / min(samples[index], samples[index - 1]) - 1)
         return locate_function(changes)
+        """
 
     @staticmethod
     def round_by_step(a_number: Decimal, step_size: Decimal):
