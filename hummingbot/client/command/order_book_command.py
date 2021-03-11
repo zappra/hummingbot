@@ -43,12 +43,14 @@ class OrderBookCommand:
 
         def get_order_book(lines):
             bids = order_book.snapshot[0][['price', 'amount']].head(lines)
-            bids.rename(columns={'price': 'bid_price', 'amount': 'bid_volume'}, inplace=True)
+            bids.rename(columns={'price': 'Bid', 'amount': 'Vol'}, inplace=True)
             asks = order_book.snapshot[1][['price', 'amount']].head(lines)
-            asks.rename(columns={'price': 'ask_price', 'amount': 'ask_volume'}, inplace=True)
+            asks.rename(columns={'price': 'Ask', 'amount': 'Vol'}, inplace=True)
             joined_df = pd.concat([bids, asks], axis=1)
-            text_lines = ["    " + line for line in joined_df.to_string(index=False).split("\n")]
-            header = f"  market: {market_connector.name} {trading_pair}\n"
+            text_lines = []
+            for line in joined_df.to_string(index=False).split("\n"):
+                text_lines.append("<pre>  " + line + "</pre>")
+            header = f"<b>Market: {market_connector.name} {trading_pair}</b>\n"
             return header + "\n".join(text_lines)
 
         if live:

@@ -39,7 +39,7 @@ class OpenOrdersCommand:
             return
         orders = sorted(orders, key=lambda x: (x.trading_pair, x.is_buy))
         data = []
-        columns = ["Market", " Side", " Spread", " Size ($)", " Age"]
+        columns = ["Market", " Side", " Spr", " Amt", " Age"]
         if full_report:
             columns.extend(["   Allocation", "   Per Total"])
         cur_balances = await self.get_current_balances(exchange)
@@ -48,12 +48,12 @@ class OpenOrdersCommand:
             total_value += await usd_value(o.trading_pair.split("-")[0], o.amount)
         for order in orders:
             base, quote = order.trading_pair.split("-")
-            side = "buy" if order.is_buy else "sell"
+            side = "BUY" if order.is_buy else "SELL"
             mid_price = await get_binance_mid_price(order.trading_pair)
             spread = abs(order.price - mid_price) / mid_price
             size_usd = await usd_value(order.trading_pair.split("-")[0], order.amount)
             age = pd.Timestamp((datetime.utcnow().replace(tzinfo=timezone.utc).timestamp() * 1e3 - order.time) / 1e3,
-                               unit='s').strftime('%H:%M:%S')
+                               unit='s').strftime('%M:%S')
             data_row = [order.trading_pair, side, f"{spread:.2%}", round(size_usd), age]
             if full_report:
                 token = quote if order.is_buy else base
@@ -64,6 +64,7 @@ class OpenOrdersCommand:
             data.append(data_row)
         lines = []
         orders_df: pd.DataFrame = pd.DataFrame(data=data, columns=columns)
-        lines.extend(["    " + line for line in orders_df.to_string(index=False).split("\n")])
+        for line in orders_df.to_string(index=False).split("\n"):
+            lines.append("<pre>" + line + "</pre>")
         self._notify("\n" + "\n".join(lines))
-        self._notify(f"\n  Total: $ {total_value:.0f}")
+        self._notify(f"\n<b>Total: ${total_value:.0f}</b>")

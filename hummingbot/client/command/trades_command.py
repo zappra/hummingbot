@@ -7,7 +7,6 @@ from typing import (
 )
 from datetime import datetime
 from hummingbot.core.utils.async_utils import safe_ensure_future
-from hummingbot.core.utils.market_price import usd_value
 from hummingbot.core.data_type.trade import Trade, TradeType
 from hummingbot.core.data_type.common import OpenOrder
 from hummingbot.client.performance import smart_round
@@ -39,8 +38,8 @@ class TradesCommand:
         if connector is None:
             self._notify("This command supports only binance (for now), please first connect to binance.")
             return
-        self._notify(f"Starting: {datetime.fromtimestamp(get_timestamp(days)).strftime('%Y-%m-%d %H:%M:%S')}"
-                     f"    Ending: {datetime.fromtimestamp(get_timestamp(0)).strftime('%Y-%m-%d %H:%M:%S')}")
+        self._notify(f"<pre>Starting: {datetime.fromtimestamp(get_timestamp(days)).strftime('%Y-%m-%d %H:%M:%S')}\n"
+                     f"Ending: {datetime.fromtimestamp(get_timestamp(0)).strftime('%Y-%m-%d %H:%M:%S')}</pre>")
         self._notify("Retrieving trades....")
         if market is not None:
             markets = {market.upper()}
@@ -62,27 +61,17 @@ class TradesCommand:
             self._notify(f"There is no trade on {market}.")
             return
         data = []
-        columns = ["Time", " Side", " Price", "Amount", " Amount ($)"]
+        columns = ["Time", " Side", " Price", "Amount"]
         trades = sorted(trades, key=lambda x: (x.trading_pair, x.timestamp))
-        fees = {}  # a dict of token and total fee amount
-        fee_usd = 0
 
         for trade in trades:
-            time = f"{datetime.fromtimestamp(trade.timestamp / 1e3).strftime('%Y-%m-%d %H:%M:%S')} "
-            side = "buy" if trade.side is TradeType.BUY else "sell"
-            usd = await usd_value(trade.trading_pair.split("-")[0], trade.amount)
-            data.append([time, side, smart_round(trade.price), smart_round(trade.amount), round(usd)])
-            for fee in trade.trade_fee.flat_fees:
-                if fee[0] not in fees:
-                    fees[fee[0]] = fee[1]
-                else:
-                    fees[fee[0]] += fee[1]
-                fee_usd += await usd_value(fee[0], fee[1])
+            time = f"{datetime.fromtimestamp(trade.timestamp / 1e3).strftime('%H:%M:%S')} "
+            side = "BUY" if trade.side is TradeType.BUY else "SELL"
+            data.append([time, side, smart_round(trade.price), smart_round(trade.amount)])
 
         lines = []
         df: pd.DataFrame = pd.DataFrame(data=data, columns=columns)
-        lines.extend([f"  {market.upper()}"])
-        lines.extend(["    " + line for line in df.to_string(index=False).split("\n")])
+        lines.extend([f"<b>{market.upper()}</b>"])
+        for line in df.to_string(index=False).split("\n"):
+            lines.append("<pre>" + line + "</pre>")
         self._notify("\n" + "\n".join(lines))
-        fee_text = ",".join(k + ": " + f"{v:.4f}" for k, v in fees.items())
-        self._notify(f"\n  Total traded: $ {df[' Amount ($)'].sum():.0f}    Fees: {fee_text} ($ {fee_usd:.2f})")
