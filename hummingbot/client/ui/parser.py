@@ -81,12 +81,8 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     open_orders_parser.set_defaults(func=hummingbot.open_orders)
 
     trades_parser = subparsers.add_parser('trades', help="Show trades")
-    trades_parser.add_argument("-d", "--days", type=float, default=1., dest="days",
-                               help="How many days in the past (can be decimal value)")
-    trades_parser.add_argument("-m", "--market", default=None,
-                               dest="market", help="The market you want to see trades.")
-    trades_parser.add_argument("-o", "--open_order_markets", default=False, action="store_true",
-                               dest="open_order_markets", help="See trades from current open order markets.")
+    trades_parser.add_argument("num", nargs="?", default=None, help="Number of trades")
+    trades_parser.add_argument("side", nargs="?", default=None, choices=["buy", "sell"], help="Side (buy/sell)")
     trades_parser.set_defaults(func=hummingbot.trades)
 
     pnl_parser = subparsers.add_parser('pnl', help="Show profits and losses")
