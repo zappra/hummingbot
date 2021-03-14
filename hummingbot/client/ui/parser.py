@@ -81,7 +81,7 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     open_orders_parser.set_defaults(func=hummingbot.open_orders)
 
     trades_parser = subparsers.add_parser('trades', help="Show trades")
-    trades_parser.add_argument("num", nargs="?", default=None, help="Number of trades")
+    trades_parser.add_argument("num", nargs="?", type=int, default=10, help="Number of trades")
     trades_parser.add_argument("side", nargs="?", default=None, choices=["buy", "sell"], help="Side (buy/sell)")
     trades_parser.set_defaults(func=hummingbot.trades)
 
