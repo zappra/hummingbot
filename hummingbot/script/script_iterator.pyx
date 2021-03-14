@@ -13,7 +13,12 @@ from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent,
     MarketEvent,
+    OrderBookEvent,
+    OrderBookTradeEvent
 )
+from hummingbot.core.data_type.composite_order_book import CompositeOrderBook
+from hummingbot.core.data_type.composite_order_book cimport CompositeOrderBook
+from hummingbot.core.event.event_listener cimport EventListener
 from hummingbot.core.event.event_forwarder import SourceInfoEventForwarder
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange_base import ExchangeBase
@@ -37,8 +42,29 @@ from hummingbot.script.script_interface import (
 
 sir_logger = None
 
+cdef class OrderBookTradeListener(EventListener):
+
+    cdef list _events
+
+    def __init__(self):
+        super().__init__()
+        self._events = []
+
+    cdef c_call(self, object event_object):
+        try:
+            self._events.append(event_object)
+        except Exception as e:
+            self.logger().error("Error call trade listener.", exc_info=True)
+
+    def get_and_reset_trades(self):
+        trades = self._events
+        self._events = []
+        return trades
+
 
 cdef class ScriptIterator(TimeIterator):
+    ORDER_BOOK_TRADE_EVENT_TAG = OrderBookEvent.TradeEvent.value
+
     @classmethod
     def logger(cls):
         global sir_logger
@@ -69,7 +95,9 @@ cdef class ScriptIterator(TimeIterator):
         self._ev_loop = asyncio.get_event_loop()
         self._parent_queue = Queue()
         self._child_queue = Queue()
+        self._live_updates = False
         self._listen_to_child_task = safe_ensure_future(self.listen_to_child_queue(), loop=self._ev_loop)
+        self._order_book_trade_listener = None
 
         self._script_process = Process(
             target=run_script,
@@ -102,13 +130,24 @@ cdef class ScriptIterator(TimeIterator):
         TimeIterator.c_tick(self, timestamp)
         if not self._strategy.all_markets_ready():
             return
+        elif self._order_book_trade_listener is None:
+            self._order_book_trade_listener = OrderBookTradeListener()
+            order_book = self.strategy.market_info.order_book
+            (<CompositeOrderBook>order_book).c_add_listener(
+                self.ORDER_BOOK_TRADE_EVENT_TAG,
+                self._order_book_trade_listener)
+
         cdef object pmm_strategy = PMMParameters()
         for attr in PMMParameters.__dict__.keys():
             if attr[:1] != '_':
                 param_value = getattr(self._strategy, attr)
                 setattr(pmm_strategy, attr, param_value)
-        cdef object on_tick = OnTick(self.strategy.get_mid_price(), pmm_strategy,
-                                     self.all_total_balances(), self.all_available_balances())
+        cdef object on_tick = OnTick(timestamp,
+                                     self.strategy.get_mid_price(),
+                                     pmm_strategy,
+                                     self.all_total_balances(),
+                                     self.all_available_balances(),
+                                     self._order_book_trade_listener.get_and_reset_trades())
         self._parent_queue.put(on_tick)
 
     def _order_filled(self,
@@ -144,7 +183,11 @@ cdef class ScriptIterator(TimeIterator):
                 elif isinstance(item, CallNotify) and not self._is_unit_testing_mode:
                     # ignore this on unit testing as the below import will mess up unit testing.
                     from hummingbot.client.hummingbot_application import HummingbotApplication
-                    HummingbotApplication.main_application()._notify(item.msg)
+                    if self._live_updates is True:
+                        msg = item.msg + "\n\nPress escape to stop live update"
+                        HummingbotApplication.main_application().app.log(msg, save_log=False)
+                    else:
+                        HummingbotApplication.main_application()._notify(item.msg)
                 elif isinstance(item, CallSendImage) and not self._is_unit_testing_mode:
                     # ignore this on unit testing as the below import will mess up unit testing.
                     from hummingbot.client.hummingbot_application import HummingbotApplication
@@ -171,6 +214,12 @@ cdef class ScriptIterator(TimeIterator):
 
     def request_status(self):
         self._parent_queue.put(OnStatus())
+
+    def set_live_updates(self, enabled: bool):
+        self._live_updates = enabled
+        # send live command again as a notification for script to stop sending live updates
+        if enabled is False:
+            self.request_command('live', [])
 
     def request_command(self, cmd: str, args: List[str]):
         self._parent_queue.put(OnCommand(cmd, args))

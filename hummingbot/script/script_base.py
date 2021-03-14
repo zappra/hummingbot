@@ -11,7 +11,8 @@ from .script_interface import CallLog, CallStop, CallForceRefresh, OrderRefreshC
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
-    SellOrderCompletedEvent
+    SellOrderCompletedEvent,
+    OrderBookTradeEvent
 )
 
 
@@ -25,6 +26,7 @@ class ScriptBase:
         self._child_queue: Queue = None
         self._queue_check_interval: float = 0.0
         self._mid_price: Decimal = None
+        self._tick_timestamp = 0.0
         self.pmm_parameters: PMMParameters = None
         self.pmm_market_info: PmmMarketInfo = None
         # all_total_balances stores balances in {exchange: {token: balance}} format
@@ -32,6 +34,8 @@ class ScriptBase:
         self.all_total_balances: Dict[str, Dict[str, Decimal]] = None
         # all_available_balances has the same data structure as all_total_balances
         self.all_available_balances: Dict[str, Dict[str, Decimal]] = None
+        # list of trades recorded since last tick
+        self.trades: List[OrderBookTradeEvent] = None
 
     def assign_init(self, parent_queue: Queue, child_queue: Queue, queue_check_interval: float):
         self._parent_queue = parent_queue
@@ -44,6 +48,10 @@ class ScriptBase:
         The current market mid price (the average of top bid and top ask)
         """
         return self._mid_price
+
+    @property
+    def tick_timestamp(self):
+        return self._tick_timestamp
 
     async def run(self):
         asyncio.ensure_future(self.listen_to_parent())
@@ -61,10 +69,12 @@ class ScriptBase:
                     asyncio.get_event_loop().stop()
                     break
                 if isinstance(item, OnTick):
+                    self._tick_timestamp = item.timestamp
                     self._mid_price = item.mid_price
                     self.pmm_parameters = item.pmm_parameters
                     self.all_total_balances = item.all_total_balances
                     self.all_available_balances = item.all_available_balances
+                    self.trades = item.trades
                     self.on_tick()
                 elif isinstance(item, OrderFilledEvent):
                     self.on_order_filled(item)

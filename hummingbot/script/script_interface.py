@@ -1,5 +1,6 @@
 from typing import Dict, List
 from decimal import Decimal
+from hummingbot.core.event.events import OrderBookTradeEvent
 
 child_queue = None
 
@@ -111,15 +112,20 @@ class PmmMarketInfo:
 
 
 class OnTick:
-    def __init__(self, mid_price: Decimal,
+    def __init__(self,
+                 timestamp,
+                 mid_price: Decimal,
                  pmm_parameters: PMMParameters,
                  all_total_balances: Dict[str, Dict[str, Decimal]],
                  all_available_balances: Dict[str, Dict[str, Decimal]],
+                 trades: List[OrderBookTradeEvent]
                  ):
+        self.timestamp = timestamp
         self.mid_price = mid_price
         self.pmm_parameters = pmm_parameters
         self.all_total_balances = all_total_balances
         self.all_available_balances = all_available_balances
+        self.trades = trades
 
     def __repr__(self):
         return f"{self.__class__.__name__} {str(self.__dict__)}"
