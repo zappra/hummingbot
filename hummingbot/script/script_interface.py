@@ -62,6 +62,8 @@ class PMMParameters:
         self._order_optimization_enabled = None
         self._ask_order_optimization_depth = None
         self._bid_order_optimization_depth = None
+        self._minimum_bid_depth = None
+        self._minimum_ask_depth = None
 
         # These below parameters are yet to open for the script
 
@@ -91,6 +93,8 @@ class PMMParameters:
     order_optimization_enabled = StrategyParameter("order_optimization_enabled")
     ask_order_optimization_depth = StrategyParameter("ask_order_optimization_depth")
     bid_order_optimization_depth = StrategyParameter("bid_order_optimization_depth")
+    minimum_bid_depth = StrategyParameter("minimum_bid_depth")
+    minimum_ask_depth = StrategyParameter("minimum_ask_depth")
 
     # add_transaction_costs_to_orders = PMMParameter("add_transaction_costs_to_orders")
     # price_ceiling = PMMParameter("price_ceiling")
@@ -111,6 +115,16 @@ class PmmMarketInfo:
         return f"{self.__class__.__name__} {str(self.__dict__)}"
 
 
+class ActiveOrder:
+    def __init__(self, price: float, amount: float, is_buy: bool):
+        self.price = price
+        self.amount = amount
+        self.is_buy = is_buy
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {str(self.__dict__)}"
+
+
 class OnTick:
     def __init__(self,
                  timestamp,
@@ -118,6 +132,7 @@ class OnTick:
                  pmm_parameters: PMMParameters,
                  all_total_balances: Dict[str, Dict[str, Decimal]],
                  all_available_balances: Dict[str, Dict[str, Decimal]],
+                 orders: List[ActiveOrder],
                  trades: List[OrderBookTradeEvent]
                  ):
         self.timestamp = timestamp
@@ -125,6 +140,7 @@ class OnTick:
         self.pmm_parameters = pmm_parameters
         self.all_total_balances = all_total_balances
         self.all_available_balances = all_available_balances
+        self.orders = orders
         self.trades = trades
 
     def __repr__(self):

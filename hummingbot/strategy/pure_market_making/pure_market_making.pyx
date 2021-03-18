@@ -123,6 +123,8 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         self._order_optimization_enabled = order_optimization_enabled
         self._ask_order_optimization_depth = ask_order_optimization_depth
         self._bid_order_optimization_depth = bid_order_optimization_depth
+        self._minimum_bid_depth = s_decimal_zero
+        self._minimum_ask_depth = s_decimal_zero
         self._add_transaction_costs_to_orders = add_transaction_costs_to_orders
         self._asset_price_delegate = asset_price_delegate
         self._inventory_cost_price_delegate = inventory_cost_price_delegate
@@ -306,6 +308,22 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @ask_order_optimization_depth.setter
     def ask_order_optimization_depth(self, value: Decimal):
         self._ask_order_optimization_depth = value
+
+    @property
+    def minimum_bid_depth(self) -> Decimal:
+        return self._minimum_bid_depth
+
+    @minimum_bid_depth.setter
+    def minimum_bid_depth(self, value: Decimal):
+        self._minimum_bid_depth = value
+
+    @property
+    def minimum_ask_depth(self) -> Decimal:
+        return self._minimum_ask_depth
+
+    @minimum_ask_depth.setter
+    def minimum_ask_depth(self, value: Decimal):
+        self._minimum_ask_depth = value
 
     @property
     def order_refresh_time(self) -> float:
@@ -723,6 +741,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             self.c_cancel_active_orders(proposal)
             self.c_cancel_hanging_orders()
             self.c_cancel_orders_below_min_spread()
+            self.c_cancel_orders_below_min_depth()
             refresh_proposal = self.c_aged_order_refresh()
             # Firstly restore cancelled aged order
             if refresh_proposal is not None:
@@ -1196,26 +1215,36 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         cdef:
             list active_orders = self.market_info_to_active_orders.get(self._market_info, [])
             object price = self.get_price()
-            int num_buys = 0
-            int num_sells = 0
 
         active_orders = [order for order in active_orders
                          if order.client_order_id not in self._hanging_order_ids]
 
-        # count number of buy and sell orders
-        for order in active_orders:
-            if order.is_buy:
-                num_buys += 1
-            else:
-                num_sells += 1
-
         for order in active_orders:
             negation = -1 if order.is_buy else 1
             if (negation * (order.price - price) / price) < self._minimum_spread:
-                if (order.is_buy and num_buys > 1) or (not order.is_buy and num_sells > 1):
-                    self.logger().info(f"Order is below minimum spread ({self._minimum_spread})."
+                self.logger().info(f"Order is below minimum spread ({self._minimum_spread})."
+                                   f" Cancelling Order: ({'Buy' if order.is_buy else 'Sell'}) "
+                                   f"ID - {order.client_order_id}")
+                self.c_cancel_order(self._market_info, order.client_order_id)
+
+    # Cancel Non-Hanging, Active Orders if depth is below min depth
+    cdef c_cancel_orders_below_min_depth(self):
+        cdef:
+            list active_orders = self.market_info_to_active_orders.get(self._market_info, [])
+            object price = self.get_price()
+
+        active_orders = [order for order in active_orders
+                         if order.client_order_id not in self._hanging_order_ids]
+
+        for order in active_orders:
+            min_depth = self._minimum_bid_depth if order.is_buy else self._minimum_ask_depth
+            if min_depth > 0:
+                depth = self.market_info.get_volume_for_price(not order.is_buy, order.price).result_volume
+                if depth < min_depth:
+                    self.logger().info(f"Order depth {depth} is below minimum depth {min_depth}."
                                        f" Cancelling Order: ({'Buy' if order.is_buy else 'Sell'}) "
                                        f"ID - {order.client_order_id}")
+
                     self.c_cancel_order(self._market_info, order.client_order_id)
 
     # Refresh all active order that are older that the _max_order_age

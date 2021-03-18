@@ -26,6 +26,7 @@ from hummingbot.script.script_process import run_script
 from hummingbot.script.script_interface import (
     StrategyParameter,
     PMMParameters,
+    ActiveOrder,
     OnTick,
     OnStatus,
     OnRefresh,
@@ -142,11 +143,17 @@ cdef class ScriptIterator(TimeIterator):
             if attr[:1] != '_':
                 param_value = getattr(self._strategy, attr)
                 setattr(pmm_strategy, attr, param_value)
+        orders = []
+        for order in self.strategy.active_orders:
+            active_order = ActiveOrder(order.price, order.quantity, order.is_buy)
+            orders.append(active_order)
+
         cdef object on_tick = OnTick(timestamp,
                                      self.strategy.get_mid_price(),
                                      pmm_strategy,
                                      self.all_total_balances(),
                                      self.all_available_balances(),
+                                     orders,
                                      self._order_book_trade_listener.get_and_reset_trades())
         self._parent_queue.put(on_tick)
 
@@ -178,7 +185,7 @@ cdef class ScriptIterator(TimeIterator):
                 if item is None:
                     break
                 if isinstance(item, StrategyParameter):
-                    self.logger().info(f"received: {str(item)}")
+                    # self.logger().info(f"received: {str(item)}")
                     setattr(self._strategy, item.name, item.updated_value)
                 elif isinstance(item, CallNotify) and not self._is_unit_testing_mode:
                     # ignore this on unit testing as the below import will mess up unit testing.
@@ -225,7 +232,7 @@ cdef class ScriptIterator(TimeIterator):
         self._parent_queue.put(OnCommand(cmd, args))
 
     def request_updated_parameters(self):
-        self.logger().info(f"sending: request_updated_parameters")
+        # self.logger().info(f"sending: request_updated_parameters")
         self._parent_queue.put(OnRefresh())
 
     def all_total_balances(self):

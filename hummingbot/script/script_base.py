@@ -6,7 +6,7 @@ from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
 
-from .script_interface import OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage
+from .script_interface import ActiveOrder, OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage
 from .script_interface import CallLog, CallStop, CallForceRefresh, OrderRefreshComplete, PmmMarketInfo, ScriptError
 from hummingbot.core.event.events import (
     OrderFilledEvent,
@@ -34,6 +34,8 @@ class ScriptBase:
         self.all_total_balances: Dict[str, Dict[str, Decimal]] = None
         # all_available_balances has the same data structure as all_total_balances
         self.all_available_balances: Dict[str, Dict[str, Decimal]] = None
+        # active orders
+        self.orders: List[ActiveOrder] = None
         # list of trades recorded since last tick
         self.trades: List[OrderBookTradeEvent] = None
 
@@ -74,6 +76,7 @@ class ScriptBase:
                     self.pmm_parameters = item.pmm_parameters
                     self.all_total_balances = item.all_total_balances
                     self.all_available_balances = item.all_available_balances
+                    self.orders = item.orders
                     self.trades = item.trades
                     self.on_tick()
                 elif isinstance(item, OrderFilledEvent):
