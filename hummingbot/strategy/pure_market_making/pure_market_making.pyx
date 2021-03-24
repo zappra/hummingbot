@@ -139,7 +139,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
         self._cancel_timestamp = 0
         self._create_timestamp = 0
-        self._hanging_aged_order_prices = []
         self._limit_order_type = self._market_info.market.get_maker_order_type()
         if take_if_crossed:
             self._limit_order_type = OrderType.LIMIT
@@ -739,13 +738,10 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                         self.c_filter_out_takers(proposal)
 
             self.c_cancel_active_orders(proposal)
-            self.c_cancel_hanging_orders()
+            self.c_cancel_aged_orders()
             self.c_cancel_orders_below_min_spread()
             self.c_cancel_orders_below_min_depth()
-            refresh_proposal = self.c_aged_order_refresh()
-            # Firstly restore cancelled aged order
-            if refresh_proposal is not None:
-                self.c_execute_orders_proposal(refresh_proposal)
+
             if self.c_to_create_orders(proposal):
                 if not self.c_execute_orders_proposal(proposal):
                     # we didn't create any orders for some reason, try again in 1 minute
@@ -1062,30 +1058,10 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             limit_order_record = self._sb_order_tracker.c_get_limit_order(self._market_info, order_id)
         if limit_order_record is None:
             return
-        active_sell_ids = [x.client_order_id for x in self.active_orders if not x.is_buy]
-
-        if self._hanging_orders_enabled:
-            # If the filled order is a hanging order, do nothing
-            if order_id in self._hanging_order_ids:
-                self.log_with_clock(
-                    logging.INFO,
-                    f"({self.trading_pair}) Hanging maker buy order {order_id} "
-                    f"({limit_order_record.quantity} {limit_order_record.base_currency} @ "
-                    f"{limit_order_record.price} {limit_order_record.quote_currency}) has been completely filled."
-                )
-                self.notify_hb_app(
-                    f"Hanging maker BUY order {limit_order_record.quantity} {limit_order_record.base_currency} @ "
-                    f"{limit_order_record.price} {limit_order_record.quote_currency} is filled."
-                )
-                return
 
         # delay order creation by filled_order_dalay (in seconds)
         self.set_create_timestamp(self._current_timestamp + self._filled_order_delay)
         self._cancel_timestamp = min(self._cancel_timestamp, self._create_timestamp)
-
-        if self._hanging_orders_enabled:
-            for other_order_id in active_sell_ids:
-                self._hanging_order_ids.append(other_order_id)
 
         self._filled_buys_balance += 1
         self._last_own_trade_price = limit_order_record.price
@@ -1107,29 +1083,10 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             LimitOrder limit_order_record = self._sb_order_tracker.c_get_limit_order(self._market_info, order_id)
         if limit_order_record is None:
             return
-        active_buy_ids = [x.client_order_id for x in self.active_orders if x.is_buy]
-        if self._hanging_orders_enabled:
-            # If the filled order is a hanging order, do nothing
-            if order_id in self._hanging_order_ids:
-                self.log_with_clock(
-                    logging.INFO,
-                    f"({self.trading_pair}) Hanging maker sell order {order_id} "
-                    f"({limit_order_record.quantity} {limit_order_record.base_currency} @ "
-                    f"{limit_order_record.price} {limit_order_record.quote_currency}) has been completely filled."
-                )
-                self.notify_hb_app(
-                    f"Hanging maker SELL order {limit_order_record.quantity} {limit_order_record.base_currency} @ "
-                    f"{limit_order_record.price} {limit_order_record.quote_currency} is filled."
-                )
-                return
 
         # delay order creation by filled_order_dalay (in seconds)
         self.set_create_timestamp(self._current_timestamp + self._filled_order_delay)
         self._cancel_timestamp = min(self._cancel_timestamp, self._create_timestamp)
-
-        if self._hanging_orders_enabled:
-            for other_order_id in active_buy_ids:
-                self._hanging_order_ids.append(other_order_id)
 
         self._filled_sells_balance += 1
         self._last_own_trade_price = limit_order_record.price
@@ -1192,24 +1149,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             #                    f"{self._order_refresh_tolerance_pct:.2%} order_refresh_tolerance_pct")
             self.set_timers()
 
-    cdef c_cancel_hanging_orders(self):
-        if not global_config_map.get("0x_active_cancels").value:
-            if ((self._market_info.market.name in self.RADAR_RELAY_TYPE_EXCHANGES) or
-                    (self._market_info.market.name == "bamboo_relay" and not self._market_info.market.use_coordinator)):
-                return
-
-        cdef:
-            object price = self.get_price()
-            list active_orders = self.active_orders
-            list orders
-            LimitOrder order
-        for h_order_id in self._hanging_order_ids:
-            orders = [o for o in active_orders if o.client_order_id == h_order_id]
-            if orders and price > 0:
-                order = orders[0]
-                if abs(order.price - price)/price >= self._hanging_orders_cancel_pct:
-                    self.c_cancel_order(self._market_info, order.client_order_id)
-
     # Cancel Non-Hanging, Active Orders if Spreads are below minimum_spread
     cdef c_cancel_orders_below_min_spread(self):
         cdef:
@@ -1247,35 +1186,20 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
                     self.c_cancel_order(self._market_info, order.client_order_id)
 
-    # Refresh all active order that are older that the _max_order_age
-    cdef c_aged_order_refresh(self):
+    # Cancel all active order that are older that the _max_order_age
+    cdef c_cancel_aged_orders(self):
         cdef:
             list active_orders = self.active_orders
-            list buys = []
-            list sells = []
 
         for order in active_orders:
             age = 0 if "//" in order.client_order_id else \
                 int(int(time.time()) - int(order.client_order_id[-16:])/1e6)
 
-            # To prevent duplicating orders due to delay in receiving cancel response
-            refresh_check = [o for o in active_orders if o.price == order.price
-                             and o.quantity == order.quantity]
-            if len(refresh_check) > 1:
-                continue
-
             if age >= self._max_order_age:
-                if order.is_buy:
-                    buys.append(PriceSize(order.price, order.quantity))
-                else:
-                    sells.append(PriceSize(order.price, order.quantity))
-                if order.client_order_id in self._hanging_order_ids:
-                    self._hanging_aged_order_prices.append(order.price)
-                self.logger().info(f"Refreshing {'Buy' if order.is_buy else 'Sell'} order with ID - "
+                self.logger().info(f"Cancelling {'Buy' if order.is_buy else 'Sell'} order with ID - "
                                    f"{order.client_order_id} because it reached maximum order age of "
                                    f"{self._max_order_age} seconds.")
                 self.c_cancel_order(self._market_info, order.client_order_id)
-        return Proposal(buys, sells)
 
     cdef bint c_to_create_orders(self, object proposal):
         return self._create_timestamp < self._current_timestamp and \
@@ -1309,9 +1233,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                     price=buy.price,
                     expiration_seconds=expiration_seconds
                 )
-                if buy.price in self._hanging_aged_order_prices:
-                    self._hanging_order_ids.append(bid_order_id)
-                    self._hanging_aged_order_prices.remove(buy.price)
                 orders_created = True
         if len(proposal.sells) > 0:
             if self._logging_options & self.OPTION_LOG_CREATE_ORDER:
@@ -1330,9 +1251,9 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                     price=sell.price,
                     expiration_seconds=expiration_seconds
                 )
-                if sell.price in self._hanging_aged_order_prices:
+                # sell orders are always hanging orders, if enabled
+                if self._hanging_orders_enabled:
                     self._hanging_order_ids.append(ask_order_id)
-                    self._hanging_aged_order_prices.remove(sell.price)
                 orders_created = True
         if orders_created:
             self.set_timers()
