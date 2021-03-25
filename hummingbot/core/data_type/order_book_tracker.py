@@ -175,7 +175,10 @@ class OrderBookTracker(ABC):
         Initialize order books
         """
         for index, trading_pair in enumerate(self._trading_pairs):
+            old_order_book = self._order_books[trading_pair] if trading_pair in self._order_books else None
             self._order_books[trading_pair] = await self._data_source.get_new_order_book(trading_pair)
+            if old_order_book is not None:
+                self._order_books[trading_pair].add_listeners(old_order_book)
             self._tracking_message_queues[trading_pair] = asyncio.Queue()
             self._tracking_tasks[trading_pair] = safe_ensure_future(self._track_single_book(trading_pair))
             self.logger().info(f"Initialized order book for {trading_pair}. "

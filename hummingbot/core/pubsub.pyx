@@ -87,6 +87,9 @@ cdef class PubSub:
         if random.random() < PubSub.ADD_LISTENER_GC_PROBABILITY:
             self.c_remove_dead_listeners(event_tag)
 
+    cdef c_add_listeners(self, PubSub other):
+        self._events = other._events
+
     cdef c_remove_listener(self, int64_t event_tag, EventListener listener):
         cdef:
             EventsIterator it = self._events.find(event_tag)

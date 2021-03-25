@@ -53,6 +53,9 @@ cdef class OrderBook(PubSub):
         self._last_trade_price_rest_updated = -1000
         self._dex = dex
 
+    def add_listeners(self, other: OrderBook):
+        self.c_add_listeners(other)
+
     cdef c_apply_diffs(self, vector[OrderBookEntry] bids, vector[OrderBookEntry] asks, int64_t update_id):
         cdef:
             set[OrderBookEntry].iterator bid_book_end = self._bid_book.end()

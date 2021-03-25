@@ -25,3 +25,4 @@ cdef class PubSub:
     cdef c_remove_dead_listeners(self, int64_t event_tag)
     cdef c_get_listeners(self, int64_t event_tag)
     cdef c_trigger_event(self, int64_t event_tag, object arg)
+    cdef c_add_listeners(self, PubSub other)
