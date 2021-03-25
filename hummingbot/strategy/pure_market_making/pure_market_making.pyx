@@ -744,9 +744,9 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
             if self.c_to_create_orders(proposal):
                 if not self.c_execute_orders_proposal(proposal):
-                    # we didn't create any orders for some reason, try again in 1 minute
+                    # we didn't create any orders for some reason, try again shortly
                     temp_refresh_time = self._order_refresh_time
-                    self._order_refresh_time = 60.0
+                    self._order_refresh_time = 10.0
                     self.set_timers()
                     self._order_refresh_time = temp_refresh_time
         finally:
@@ -1252,7 +1252,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                     expiration_seconds=expiration_seconds
                 )
                 # sell orders are always hanging orders, if enabled
-                if self._hanging_orders_enabled:
+                if self._hanging_orders_enabled is True:
                     self._hanging_order_ids.append(ask_order_id)
                 orders_created = True
         if orders_created:
