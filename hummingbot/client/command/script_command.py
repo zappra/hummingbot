@@ -25,5 +25,6 @@ class ScriptCommand:
         while self.app.live_updates:
             await asyncio.sleep(1)
         self.app.output_field.buffer.undo()
-        self._script_iterator.set_live_updates(False)
+        if self._script_iterator is not None:
+            self._script_iterator.set_live_updates(False)
         self._notify("Stopped script live update.")
