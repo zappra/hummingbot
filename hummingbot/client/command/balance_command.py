@@ -14,6 +14,7 @@ from hummingbot.core.utils.market_price import usd_value
 import pandas as pd
 from decimal import Decimal
 from typing import TYPE_CHECKING, Dict, Optional, List
+import threading
 
 if TYPE_CHECKING:
     from hummingbot.client.hummingbot_application import HummingbotApplication
@@ -29,6 +30,10 @@ class BalanceCommand:
                 option: str = None,
                 args: List[str] = None
                 ):
+        if threading.current_thread() != threading.main_thread():
+            self.ev_loop.call_soon_threadsafe(self.balance, option, args)
+            return
+
         self.app.clear_input()
         if option is None:
             safe_ensure_future(self.show_balances())
@@ -91,10 +96,12 @@ class BalanceCommand:
             if df.empty:
                 self._notify("You have no balance on this exchange.")
             else:
-                lines = ["    " + line for line in df.to_string(index=False).split("\n")]
-                self._notify("\n".join(lines))
-                self._notify(f"\n  Total: $ {df['Total ($)'].sum():.0f}    "
-                             f"Allocated: {allocated_total / df['Total ($)'].sum():.2%}")
+                msg = ''
+                lines = df.to_string(index=False).split("\n")
+                for line in lines:
+                    msg += '<pre>  ' + line + '</pre>\n'
+                self._notify(msg)
+                self._notify(f"\n<pre>Total: $ {df['Total ($)'].sum():.0f}</pre>")
 
         celo_address = global_config_map["celo_address"].value
         if celo_address is not None:
@@ -140,16 +147,14 @@ class BalanceCommand:
             if bal == Decimal(0):
                 continue
             avai = Decimal(ex_avai_balances.get(token.upper(), 0)) if ex_avai_balances is not None else Decimal(0)
-            allocated = f"{(bal - avai) / bal:.0%}"
             usd = await usd_value(token, bal)
             usd = 0 if usd is None else usd
             allocated_total += await usd_value(token, (bal - avai))
             rows.append({"Asset": token.upper(),
                          "Total": round(bal, 4),
-                         "Total ($)": round(usd),
-                         "Allocated": allocated,
+                         "Total ($)": round(usd)
                          })
-        df = pd.DataFrame(data=rows, columns=["Asset", "Total", "Total ($)", "Allocated"])
+        df = pd.DataFrame(data=rows, columns=["Asset", "Total", "Total ($)"])
         df.sort_values(by=["Asset"], inplace=True)
         return df, allocated_total
 
