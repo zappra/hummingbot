@@ -1,13 +1,9 @@
-from typing import Dict, List
-from decimal import Decimal
-from hummingbot.core.event.events import OrderBookTradeEvent
-
-child_queue = None
+iterator = None
 
 
-def set_child_queue(queue):
-    global child_queue
-    child_queue = queue
+def set_iterator(obj):
+    global iterator
+    iterator = obj
 
 
 class StrategyParameter(object):
@@ -24,11 +20,11 @@ class StrategyParameter(object):
         return getattr(obj, self.attr)
 
     def __set__(self, obj, value):
-        global child_queue
+        global iterator
         old_value = getattr(obj, self.attr)
         if (old_value is not None and old_value != value):
             self.updated_value = value
-            child_queue.put(self)
+            iterator.set_strategy_parameter(self)
         setattr(obj, self.attr, value)
 
     def __repr__(self):
@@ -101,9 +97,6 @@ class PMMParameters:
     # price_floor = PMMParameter("price_floor")
     # ping_pong_enabled = PMMParameter("ping_pong_enabled")
 
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
 
 class PmmMarketInfo:
     def __init__(self, exchange: str,
@@ -111,103 +104,9 @@ class PmmMarketInfo:
         self.exchange = exchange
         self.trading_pair = trading_pair
 
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
 
 class ActiveOrder:
     def __init__(self, price: float, amount: float, is_buy: bool):
         self.price = price
         self.amount = amount
         self.is_buy = is_buy
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class OnTick:
-    def __init__(self,
-                 timestamp,
-                 mid_price: Decimal,
-                 pmm_parameters: PMMParameters,
-                 all_total_balances: Dict[str, Dict[str, Decimal]],
-                 all_available_balances: Dict[str, Dict[str, Decimal]],
-                 orders: List[ActiveOrder],
-                 trades: List[OrderBookTradeEvent]
-                 ):
-        self.timestamp = timestamp
-        self.mid_price = mid_price
-        self.pmm_parameters = pmm_parameters
-        self.all_total_balances = all_total_balances
-        self.all_available_balances = all_available_balances
-        self.orders = orders
-        self.trades = trades
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class OnStatus:
-    pass
-
-
-class OnRefresh:
-    pass
-
-
-class OnCommand:
-    def __init__(self, cmd: str, args: List[str]):
-        self.cmd = cmd
-        self.args = args
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class CallNotify:
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class CallSendImage:
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class CallLog:
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class CallStop:
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.__dict__)}"
-
-
-class ScriptError:
-    def __init__(self, error: Exception, traceback: str):
-        self.error = error
-        self.traceback = traceback
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {str(self.error)} \nTrace back: {self.traceback}"
-
-
-class CallForceRefresh:
-    pass
-
-
-class OrderRefreshComplete:
-    pass

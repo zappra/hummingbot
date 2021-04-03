@@ -1,19 +1,16 @@
-import asyncio
-import traceback
-from multiprocessing import Queue
 from typing import List, Optional, Dict, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
 
-from .script_interface import ActiveOrder, OnTick, OnStatus, OnCommand, OnRefresh, PMMParameters, CallNotify, CallSendImage
-from .script_interface import CallLog, CallStop, CallForceRefresh, OrderRefreshComplete, PmmMarketInfo, ScriptError
+from .script_interface import ActiveOrder, PMMParameters, PmmMarketInfo
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent,
     OrderBookTradeEvent
 )
+from .script_iterator import ScriptIterator
 
 
 class ScriptBase:
@@ -22,11 +19,9 @@ class ScriptBase:
     A user defined script should derive from this base class to get all its functionality.
     """
     def __init__(self):
-        self._parent_queue: Queue = None
-        self._child_queue: Queue = None
-        self._queue_check_interval: float = 0.0
+        self.iterator: ScriptIterator = None
+
         self._mid_price: Decimal = None
-        self._tick_timestamp = 0.0
         self.pmm_parameters: PMMParameters = None
         self.pmm_market_info: PmmMarketInfo = None
         # all_total_balances stores balances in {exchange: {token: balance}} format
@@ -39,11 +34,6 @@ class ScriptBase:
         # list of trades recorded since last tick
         self.trades: List[OrderBookTradeEvent] = None
 
-    def assign_init(self, parent_queue: Queue, child_queue: Queue, queue_check_interval: float):
-        self._parent_queue = parent_queue
-        self._child_queue = child_queue
-        self._queue_check_interval = queue_check_interval
-
     @property
     def mid_price(self):
         """
@@ -51,60 +41,20 @@ class ScriptBase:
         """
         return self._mid_price
 
-    @property
-    def tick_timestamp(self):
-        return self._tick_timestamp
-
-    async def run(self):
-        asyncio.ensure_future(self.listen_to_parent())
-
-    async def listen_to_parent(self):
-        while True:
-            try:
-                if self._parent_queue.empty():
-                    await asyncio.sleep(self._queue_check_interval)
-                    continue
-                item = self._parent_queue.get()
-                # print(f"child gets {str(item)}")
-                if item is None:
-                    # print("child exiting..")
-                    asyncio.get_event_loop().stop()
-                    break
-                if isinstance(item, OnTick):
-                    self._tick_timestamp = item.timestamp
-                    self._mid_price = item.mid_price
-                    self.pmm_parameters = item.pmm_parameters
-                    self.all_total_balances = item.all_total_balances
-                    self.all_available_balances = item.all_available_balances
-                    self.orders = item.orders
-                    self.trades = item.trades
-                    self.on_tick()
-                elif isinstance(item, OrderFilledEvent):
-                    self.on_order_filled(item)
-                elif isinstance(item, BuyOrderCompletedEvent):
-                    self.on_buy_order_completed(item)
-                elif isinstance(item, SellOrderCompletedEvent):
-                    self.on_sell_order_completed(item)
-                elif isinstance(item, OnStatus):
-                    status_msg = self.on_status()
-                    if status_msg:
-                        self.notify(f"Script status: {status_msg}")
-                elif isinstance(item, OnCommand):
-                    self.on_command(item.cmd, item.args)
-                elif isinstance(item, OnRefresh):
-                    # this will push any changed parameters onto the queue
-                    self.on_order_refresh()
-                    # followed by notification that refresh is complete
-                    self._child_queue.put(OrderRefreshComplete())
-                elif isinstance(item, PmmMarketInfo):
-                    self.pmm_market_info = item
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                # Capturing traceback here and put it as part of ScriptError, which can then be reported in the parent
-                # process.
-                tb = "".join(traceback.TracebackException.from_exception(e).format())
-                self._child_queue.put(ScriptError(e, tb))
+    def tick(self,
+             mid_price: Decimal,
+             pmm_parameters: PMMParameters,
+             all_total_balances: Dict[str, Dict[str, Decimal]],
+             all_available_balances: Dict[str, Dict[str, Decimal]],
+             orders: List[ActiveOrder],
+             trades: List[OrderBookTradeEvent]):
+        self._mid_price = mid_price
+        self.pmm_parameters = pmm_parameters
+        self.all_total_balances = all_total_balances
+        self.all_available_balances = all_available_balances
+        self.orders = orders
+        self.trades = trades
+        self.on_tick()
 
     def notify(self, msg: str):
         """
@@ -112,33 +62,44 @@ class ScriptBase:
         If Telegram integration enabled, the message will also be sent to the telegram user.
         :param msg: The message.
         """
-        self._child_queue.put(CallNotify(msg))
+        self.iterator.notify(msg)
+
+    @property
+    def live_updates(self):
+        return self.iterator.live_updates
+
+    def set_live_text(self, text: str):
+        """
+        Set text for live ui
+        :param text: Live text
+        """
+        self.iterator.set_live_text(text)
 
     def send_image(self, image: str):
         """
         Send image via notifiers
         """
-        self._child_queue.put(CallSendImage(image))
+        self.iterator.send_image(image)
 
     def log(self, msg: str):
         """
         Logs message to the strategy log file and display it on Running Logs section of HB.
         :param msg: The message.
         """
-        self._child_queue.put(CallLog(msg))
+        self.iterator.log(msg)
 
     def request_stop(self, reason: str):
         """
         Request stop command on main strategy in the event of error or custom kill switch type condition
         :param reason: Reason, which will be logged by main application
         """
-        self._child_queue.put(CallStop(reason))
+        self.iterator.request_stop(reason)
 
     def force_order_refresh(self):
         """
         Force an order refresh cycle to occur
         """
-        self._child_queue.put(CallForceRefresh())
+        self.iterator.force_order_refresh()
 
     def avg_mid_price(self, interval: int, length: int) -> Optional[Decimal]:
         """

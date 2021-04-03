@@ -22,23 +22,12 @@ from hummingbot.core.event.event_listener cimport EventListener
 from hummingbot.core.event.event_forwarder import SourceInfoEventForwarder
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange_base import ExchangeBase
-from hummingbot.script.script_process import run_script
+from hummingbot.script.script_adapter import ScriptAdapter
 from hummingbot.script.script_interface import (
     StrategyParameter,
     PMMParameters,
     ActiveOrder,
-    OnTick,
-    OnStatus,
-    OnRefresh,
-    OnCommand,
-    CallNotify,
-    CallSendImage,
-    CallLog,
-    CallStop,
-    CallForceRefresh,
-    OrderRefreshComplete,
-    PmmMarketInfo,
-    ScriptError,
+    PmmMarketInfo
 )
 
 sir_logger = None
@@ -94,38 +83,41 @@ cdef class ScriptIterator(TimeIterator):
             (MarketEvent.SellOrderCompleted, self._did_complete_sell_order_forwarder)
         ]
         self._ev_loop = asyncio.get_event_loop()
-        self._parent_queue = Queue()
-        self._child_queue = Queue()
+
         self._live_updates = False
-        self._listen_to_child_task = safe_ensure_future(self.listen_to_child_queue(), loop=self._ev_loop)
         self._order_book_trade_listener = None
 
-        self._script_process = Process(
-            target=run_script,
-            args=(script_file_path, self._parent_queue, self._child_queue, queue_check_interval,)
-        )
-        self.logger().info(f"starting script in {script_file_path}")
-        self._script_process.start()
+        self.logger().info(f"Loading script: {script_file_path}")
+        self._script_adapter = ScriptAdapter()
+        # any exception here is handled by calling code
+        self._script_adapter.load_script(self, script_file_path)
 
     @property
     def strategy(self):
         return self._strategy
+
+    @property
+    def live_updates(self):
+        return self._live_updates
+
+    @live_updates.setter
+    def live_updates(self, value: bool):
+        self._live_updates = value
 
     cdef c_start(self, Clock clock, double timestamp):
         TimeIterator.c_start(self, clock, timestamp)
         for market in self._markets:
             for event_pair in self._event_pairs:
                 market.add_listener(event_pair[0], event_pair[1])
-        self._parent_queue.put(PmmMarketInfo(self._strategy.market_info.market.name,
-                                             self._strategy.trading_pair))
+        try:
+            self._script_adapter.start(PmmMarketInfo(
+                self._strategy.market_info.market.name,
+                self._strategy.trading_pair))
+        except Exception:
+            self.handle_exception('c_start')
 
     cdef c_stop(self, Clock clock):
         TimeIterator.c_stop(self, clock)
-        self._parent_queue.put(None)
-        self._child_queue.put(None)
-        self._script_process.join()
-        if self._listen_to_child_task is not None:
-            self._listen_to_child_task.cancel()
 
     cdef c_tick(self, double timestamp):
         TimeIterator.c_tick(self, timestamp)
@@ -143,97 +135,111 @@ cdef class ScriptIterator(TimeIterator):
             if attr[:1] != '_':
                 param_value = getattr(self._strategy, attr)
                 setattr(pmm_strategy, attr, param_value)
+
         orders = []
         for order in self.strategy.active_orders:
             active_order = ActiveOrder(order.price, order.quantity, order.is_buy)
             orders.append(active_order)
 
-        cdef object on_tick = OnTick(timestamp,
-                                     self.strategy.get_mid_price(),
-                                     pmm_strategy,
-                                     self.all_total_balances(),
-                                     self.all_available_balances(),
-                                     orders,
-                                     self._order_book_trade_listener.get_and_reset_trades())
-        self._parent_queue.put(on_tick)
+        try:
+            self._script_adapter.tick(self.strategy.get_mid_price(),
+                                      pmm_strategy,
+                                      self.all_total_balances(),
+                                      self.all_available_balances(),
+                                      orders,
+                                      self._order_book_trade_listener.get_and_reset_trades())
+        except Exception:
+            self.handle_exception('c_tick')
 
     def _order_filled(self,
                       event_tag: int,
                       market: ExchangeBase,
                       event: OrderFilledEvent):
-        self._parent_queue.put(event)
+        try:
+            self._script_adapter.order_filled(event)
+        except Exception:
+            self.handle_exception('_order_filled')
 
     def _did_complete_buy_order(self,
                                 event_tag: int,
                                 market: ExchangeBase,
                                 event: BuyOrderCompletedEvent):
-        self._parent_queue.put(event)
+        try:
+            self._script_adapter.buy_order_completed(event)
+        except Exception:
+            self.handle_exception('_did_complete_buy_order')
 
     def _did_complete_sell_order(self,
                                  event_tag: int,
                                  market: ExchangeBase,
                                  event: SellOrderCompletedEvent):
-        self._parent_queue.put(event)
+        try:
+            self._script_adapter.sell_order_completed(event)
+        except Exception:
+            self.handle_exception('_did_complete_sell_order')
 
-    async def listen_to_child_queue(self):
-        while True:
-            try:
-                if self._child_queue.empty():
-                    await asyncio.sleep(self._queue_check_interval)
-                    continue
-                item = self._child_queue.get()
-                if item is None:
-                    break
-                if isinstance(item, StrategyParameter):
-                    # self.logger().info(f"received: {str(item)}")
-                    setattr(self._strategy, item.name, item.updated_value)
-                elif isinstance(item, CallNotify) and not self._is_unit_testing_mode:
-                    # ignore this on unit testing as the below import will mess up unit testing.
-                    from hummingbot.client.hummingbot_application import HummingbotApplication
-                    if self._live_updates is True:
-                        msg = item.msg + "\n\nPress escape to stop live update"
-                        HummingbotApplication.main_application().app.log(msg, save_log=False)
-                    else:
-                        HummingbotApplication.main_application()._notify(item.msg)
-                elif isinstance(item, CallSendImage) and not self._is_unit_testing_mode:
-                    # ignore this on unit testing as the below import will mess up unit testing.
-                    from hummingbot.client.hummingbot_application import HummingbotApplication
-                    HummingbotApplication.main_application()._send_image(item.msg)
-                elif isinstance(item, CallStop) and not self._is_unit_testing_mode:
-                    msg = 'Stop request has been received from script\n'
-                    msg += f"Reason: {item.msg}"
-                    from hummingbot.client.hummingbot_application import HummingbotApplication
-                    hb = HummingbotApplication.main_application()
-                    hb._notify(msg)
-                    hb.stop()
-                elif isinstance(item, CallForceRefresh):
-                    self._strategy.force_order_refresh()
-                elif isinstance(item, OrderRefreshComplete):
-                    self._strategy.order_refresh_complete()
-                elif isinstance(item, CallLog):
-                    self.logger().info(f"script - {item.msg}")
-                elif isinstance(item, ScriptError):
-                    self.logger().info(f"{item}")
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                self.logger().info("Unexpected error listening to child queue.", exc_info=True)
+    def set_strategy_parameter(self, item: StrategyParameter):
+        setattr(self._strategy, item.name, item.updated_value)
+
+    def notify(self, msg: str):
+        # ignore this on unit testing as the below import will mess up unit testing.
+        if not self._is_unit_testing_mode:
+            from hummingbot.client.hummingbot_application import HummingbotApplication
+            HummingbotApplication.main_application()._notify(msg)
+
+    def set_live_text(self, text: str):
+        # ignore this on unit testing as the below import will mess up unit testing.
+        if not self._is_unit_testing_mode:
+            from hummingbot.client.hummingbot_application import HummingbotApplication
+            if self.live_updates is True:
+                HummingbotApplication.main_application().app.set_live_text(text)
+
+    def send_image(self, image: str):
+        if not self._is_unit_testing_mode:
+            from hummingbot.client.hummingbot_application import HummingbotApplication
+            HummingbotApplication.main_application()._send_image(image)
+
+    def request_stop(self, reason: str):
+        if not self._is_unit_testing_mode:
+            msg = 'Stop request has been received from script\n'
+            msg += f"Reason: {reason}"
+            from hummingbot.client.hummingbot_application import HummingbotApplication
+            hb = HummingbotApplication.main_application()
+            hb._notify(msg)
+            hb.stop()
+
+    def force_order_refresh(self):
+        self._strategy.force_order_refresh()
+
+    def log(self, msg: str):
+        self.logger().info(f"script - {msg}")
+
+    def handle_exception(self, location: str):
+        lines = traceback.format_exc().splitlines()
+        msg = f'<b>Script exception in function \'{location}\':</b>\n'
+        for line in lines:
+            self.log(f'  {line}')
+            msg += f'<pre>  {line}</pre>\n'
+        self.notify(msg)
+        self.request_stop('Exception')
 
     def request_status(self):
-        self._parent_queue.put(OnStatus())
+        try:
+            self._script_adapter.status()
+        except Exception:
+            self.handle_exception('request_status')
 
-    def set_live_updates(self, enabled: bool):
-        self._live_updates = enabled
-        # send live command again as a notification for script to stop sending live updates
-        if enabled is False:
-            self.request_command('live', [])
+    def command(self, cmd: str, args: List[str]):
+        try:
+            self._script_adapter.command(cmd, args)
+        except Exception:
+            self.handle_exception('command')
 
-    def request_command(self, cmd: str, args: List[str]):
-        self._parent_queue.put(OnCommand(cmd, args))
-
-    def request_updated_parameters(self):
-        # self.logger().info(f"sending: request_updated_parameters")
-        self._parent_queue.put(OnRefresh())
+    def order_refresh(self):
+        try:
+            self._script_adapter.order_refresh()
+        except Exception:
+            self.handle_exception('order_refresh')
 
     def all_total_balances(self):
         all_bals = {m.name: m.get_all_balances() for m in self._markets}

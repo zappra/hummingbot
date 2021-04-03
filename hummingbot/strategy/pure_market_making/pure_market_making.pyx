@@ -148,8 +148,6 @@ cdef class PureMarketMakingStrategy(StrategyBase):
         self._hanging_order_ids = []
         self._logging_options = logging_options
         self._last_timestamp = 0
-        self._script_order_refresh_pending = True
-        self._last_order_refresh_complete_timestamp = 0
         self._status_report_interval = status_report_interval
         self._last_own_trade_price = Decimal('nan')
 
@@ -719,23 +717,21 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 self.set_create_timestamp(self._current_timestamp + warmup)
 
             if self._create_timestamp <= self._current_timestamp:
-                # 1. Ensure script had updated PMM params
-                self.call_script_parameter_refresh()
-                # need to have completed order refresh after the creation time
-                if self._last_order_refresh_complete_timestamp >= self._create_timestamp:
-                    # 2. Create base order proposals
-                    proposal = self.c_create_base_proposal()
-                    # 3. Apply functions that limit numbers of buys and sells proposal
-                    self.c_apply_order_levels_modifiers(proposal)
-                    # 4. Apply functions that modify orders price
-                    self.c_apply_order_price_modifiers(proposal)
-                    # 5. Apply functions that modify orders size
-                    self.c_apply_order_size_modifiers(proposal)
-                    # 6. Apply budget constraint, i.e. can't buy/sell more than what you have.
-                    self.c_apply_budget_constraint(proposal)
+                # 1. Allow script to update parameters
+                self.script_order_refresh()
+                # 2. Create base order proposals
+                proposal = self.c_create_base_proposal()
+                # 3. Apply functions that limit numbers of buys and sells proposal
+                self.c_apply_order_levels_modifiers(proposal)
+                # 4. Apply functions that modify orders price
+                self.c_apply_order_price_modifiers(proposal)
+                # 5. Apply functions that modify orders size
+                self.c_apply_order_size_modifiers(proposal)
+                # 6. Apply budget constraint, i.e. can't buy/sell more than what you have.
+                self.c_apply_budget_constraint(proposal)
 
-                    if not self._take_if_crossed:
-                        self.c_filter_out_takers(proposal)
+                if not self._take_if_crossed:
+                    self.c_filter_out_takers(proposal)
 
             self.c_cancel_active_orders(proposal)
             self.c_cancel_aged_orders()
@@ -1145,8 +1141,8 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 self.c_cancel_order(self._market_info, order.client_order_id)
         else:
             # self.logger().info(f"Not cancelling active orders since difference between new order prices "
-            #                    f"and current order prices is within "
-            #                    f"{self._order_refresh_tolerance_pct:.2%} order_refresh_tolerance_pct")
+            #                   f"and current order prices is within "
+            #                   f"{self._order_refresh_tolerance_pct:.2%} order_refresh_tolerance_pct")
             self.set_timers()
 
     # Cancel Non-Hanging, Active Orders if Spreads are below minimum_spread
@@ -1268,37 +1264,24 @@ cdef class PureMarketMakingStrategy(StrategyBase):
             self._cancel_timestamp = min(self._create_timestamp, next_cycle)
 
     def set_create_timestamp(self, ts):
-        # any time we set a new order create time we trigger a script order refresh
         self._create_timestamp = ts
-        self._script_order_refresh_pending = True
 
     def force_order_refresh(self):
         # called from scripts to force order refresh cycle
         self.set_create_timestamp(self._current_timestamp)
         self._cancel_timestamp = self._current_timestamp
 
-    def order_refresh_complete(self):
-        # called from scripts to indicate all parameters have been set and order processing can continue
-        self._last_order_refresh_complete_timestamp = self._current_timestamp
-
     def notify_hb_app(self, msg: str):
         if self._hb_app_notification:
             from hummingbot.client.hummingbot_application import HummingbotApplication
             HummingbotApplication.main_application()._notify(msg)
 
-    def call_script_parameter_refresh(self):
-        # ensure this function is only called once in an order refresh cycle
-        if self._script_order_refresh_pending is True:
-            from hummingbot.client.hummingbot_application import HummingbotApplication
-            script = HummingbotApplication.main_application()._script_iterator
-            # request parameter update from script
-            if script is not None:
-                script.request_updated_parameters()
-            else:
-                # if there's no script then mark as complete allowing order processing to continue
-                self._last_order_refresh_complete_timestamp = self._current_timestamp
-
-            self._script_order_refresh_pending = False
+    def script_order_refresh(self):
+        from hummingbot.client.hummingbot_application import HummingbotApplication
+        script = HummingbotApplication.main_application()._script_iterator
+        # call script order refresh
+        if script is not None:
+            script.order_refresh()
 
     def get_price_type(self, price_type_str: str) -> PriceType:
         if price_type_str == "mid_price":
