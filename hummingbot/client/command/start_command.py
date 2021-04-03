@@ -134,13 +134,16 @@ class StartCommand:
                 folder = dirname(script_file)
                 if folder == "":
                     script_file = join(SCRIPTS_PATH, script_file)
-                if self.strategy_name != "pure_market_making":
-                    self._notify("Error: script feature is only available for pure_market_making strategy (for now).")
+                if self.strategy_name not in ["pure_market_making", "liquidity_mining"]:
+                    self._notify(f"Error: script feature is not available for {self.strategy_name}")
                 else:
-                    self._script_iterator = ScriptIterator(script_file, list(self.markets.values()),
-                                                           self.strategy, 0.1)
-                    self.clock.add_iterator(self._script_iterator)
-                    self._notify(f"Script ({script_file}) started.")
+                    try:
+                        self._script_iterator = ScriptIterator(script_file, list(self.markets.values()), self.strategy)
+                        self.clock.add_iterator(self._script_iterator)
+                        self._notify(f"Script ({script_file}) started.")
+                    except Exception as ex:
+                        self._notify(f"Failed to start script {script_file}:")
+                        self._notify(f"{ex}")
 
             if global_config_map["ethgasstation_gas_enabled"].value and ethereum_gas_station_required():
                 EthGasStationLookup.get_instance().start()

@@ -98,12 +98,18 @@ class HummingbotCLI:
     def clear_input(self):
         self.pending_input = None
 
-    def set_live_text(self, text: str):
+    async def set_live_text_async(self, text: str, escape_prompt=True, sleep=1):
+        self.set_live_text(text, escape_prompt)
+        await asyncio.sleep(sleep)
+
+    def set_live_text(self, text: str, escape_prompt=True):
         if text is None or text == '':
             self.live_output_max_lines = 0
             self.live_output_field.log('', save_log=False)
         else:
-            text = "\n\n" + text
+            text = "\n" + text + "\n"
+            if escape_prompt is True:
+                text += "\nPress escape to stop live update\n"
             size = text.count('\n')
             if size > self.live_output_max_lines:
                 self.live_output_max_lines = size

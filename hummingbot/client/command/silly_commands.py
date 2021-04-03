@@ -73,7 +73,7 @@ class SillyCommands:
         await self.cls_display_delay(stay_calm, 1.75)
         await self.cls_display_delay(and_hodl, 1.75)
         for _ in range(3):
-            await self.cls_display_delay("\n" * 50, 0.25)
+            await self.cls_display_delay("\n" * 35, 0.25)
             await self.cls_display_delay(bitcoin, 0.25)
         await self.cls_display_delay(bitcoin, 1.75)
         self.placeholder_mode = False
@@ -195,8 +195,8 @@ class SillyCommands:
         await self.stop_live_update()
 
     async def cls_display_delay(self, lines, delay=0.5):
-        self.app.set_live_text("".join(lines) + "\n\n")
-        await asyncio.sleep(delay)
+        text = "".join(lines) + "\n\n"
+        await self.app.set_live_text_async(text, escape_prompt=False, sleep=delay)
 
     async def stop_live_update(self):
         if self.app.live_updates is True:

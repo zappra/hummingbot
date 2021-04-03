@@ -118,7 +118,7 @@ def create_live_output_field():
         scrollbar=False,
         max_line_count=MAXIMUM_OUTPUT_PANE_LINE_COUNT,
         initial_text='',
-        height=Dimension(weight=3)
+        height=Dimension(weight=8)
 
     )
 

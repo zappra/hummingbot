@@ -9,9 +9,11 @@ class ScriptCommand:
                        cmd: str = None,
                        args: List[str] = None):
         if self._script_iterator is not None:
-            self._script_iterator.request_command(cmd, args)
             if cmd == 'live':
+                # script doesn't process this command, just sets a flag on the iterator
                 safe_ensure_future(self.script_live_updates(), loop=self.ev_loop)
+            else:
+                self._script_iterator.command(cmd, args)
         else:
             self._notify('No script is active, command ignored')
 
@@ -20,9 +22,9 @@ class ScriptCommand:
     async def script_live_updates(self):
         await self.stop_live_update()
         self.app.live_updates = True
-        self._script_iterator.set_live_updates(True)
+        self._script_iterator.live_updates = True
         while self.app.live_updates:
             await asyncio.sleep(1)
         if self._script_iterator is not None:
-            self._script_iterator.set_live_updates(False)
+            self._script_iterator.live_updates = False
         self._notify("Stopped script live update.")
