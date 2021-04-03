@@ -61,6 +61,7 @@ class SillyCommands:
         await self.cls_display_delay(jack_2, 1.5)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def silly_hodl(self,  # type: HummingbotApplication
                          ):
@@ -77,6 +78,7 @@ class SillyCommands:
         await self.cls_display_delay(bitcoin, 1.75)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def silly_hummingbot(self,  # type: HummingbotApplication
                                ):
@@ -97,6 +99,7 @@ class SillyCommands:
                 await self.cls_display_delay(hb_with_flower_up_close_2, 0.125)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def silly_roger(self,  # type: HummingbotApplication
                           ):
@@ -124,6 +127,7 @@ class SillyCommands:
         await asyncio.sleep(0.15)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def silly_victor(self,  # type: HummingbotApplication
                            ):
@@ -138,6 +142,7 @@ class SillyCommands:
         await asyncio.sleep(0.3)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def silly_rein(self,  # type: HummingbotApplication
                          ):
@@ -155,6 +160,7 @@ class SillyCommands:
         await asyncio.sleep(0.3)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def text_n_wait(self, text, delay):
         self.app.log(text)
@@ -186,17 +192,17 @@ class SillyCommands:
         await asyncio.sleep(4)
         self.placeholder_mode = False
         self.app.hide_input = False
+        await self.stop_live_update()
 
     async def cls_display_delay(self, lines, delay=0.5):
-        self.app.output_field.buffer.save_to_undo_stack()
-        self.app.log("".join(lines), save_log=False)
+        self.app.set_live_text("".join(lines) + "\n\n")
         await asyncio.sleep(delay)
-        self.app.output_field.buffer.undo()
 
     async def stop_live_update(self):
         if self.app.live_updates is True:
             self.app.live_updates = False
             await asyncio.sleep(1)
+        self.app.set_live_text('')
 
     def display_alert(self, custom_alert = None):
         alert = """
