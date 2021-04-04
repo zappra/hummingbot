@@ -249,6 +249,10 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @hanging_orders_enabled.setter
     def hanging_orders_enabled(self, value: bool):
         self._hanging_orders_enabled = value
+        if value is False:
+            for order_id in self._hanging_order_ids:
+                self.c_cancel_order(self._market_info, order_id)
+            self._hanging_order_ids.clear()
 
     @property
     def hanging_orders_cancel_pct(self) -> Decimal:
@@ -389,6 +393,14 @@ cdef class PureMarketMakingStrategy(StrategyBase):
     @order_override.setter
     def order_override(self, value: Dict[str, List[str]]):
         self._order_override = value
+
+    @property
+    def max_order_age(self):
+        return self._max_order_age
+
+    @max_order_age.setter
+    def max_order_age(self, value: float):
+        self._max_order_age = value
 
     def get_price(self) -> float:
         price_provider = self._asset_price_delegate or self._market_info
@@ -1170,6 +1182,9 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
         active_orders = [order for order in active_orders
                          if order.client_order_id not in self._hanging_order_ids]
+
+        if not self._order_optimization_enabled:
+            return
 
         for order in active_orders:
             min_depth = self._minimum_bid_depth if order.is_buy else self._minimum_ask_depth
