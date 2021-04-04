@@ -23,12 +23,7 @@ from hummingbot.core.event.event_forwarder import SourceInfoEventForwarder
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.script.script_adapter import ScriptAdapter
-from hummingbot.script.script_interface import (
-    StrategyParameter,
-    PMMParameters,
-    ActiveOrder,
-    PmmMarketInfo
-)
+
 
 sir_logger = None
 
@@ -66,14 +61,12 @@ cdef class ScriptIterator(TimeIterator):
                  script_file_path: str,
                  markets: List[ExchangeBase],
                  strategy: PureMarketMakingStrategy,
-                 queue_check_interval: float = 0.01,
                  is_unit_testing_mode: bool = False):
         super().__init__()
         self._script_file_path = script_file_path
         self._markets = markets
         self._strategy = strategy
         self._is_unit_testing_mode = is_unit_testing_mode
-        self._queue_check_interval = queue_check_interval
         self._order_filled_forwarder = SourceInfoEventForwarder(self._order_filled)
         self._did_complete_buy_order_forwarder = SourceInfoEventForwarder(self._did_complete_buy_order)
         self._did_complete_sell_order_forwarder = SourceInfoEventForwarder(self._did_complete_sell_order)
@@ -83,6 +76,9 @@ cdef class ScriptIterator(TimeIterator):
             (MarketEvent.SellOrderCompleted, self._did_complete_sell_order_forwarder)
         ]
         self._ev_loop = asyncio.get_event_loop()
+
+        self._all_total_balances = {}
+        self._all_available_balances = {}
 
         self._live_updates = False
         self._order_book_trade_listener = None
@@ -95,6 +91,18 @@ cdef class ScriptIterator(TimeIterator):
     @property
     def strategy(self):
         return self._strategy
+
+    @property
+    def all_total_balances(self):
+        return self._all_total_balances
+
+    @property
+    def all_available_balances(self):
+        return self._all_available_balances
+
+    @property
+    def active_orders(self):
+        return self._strategy.active_orders
 
     @property
     def live_updates(self):
@@ -110,9 +118,15 @@ cdef class ScriptIterator(TimeIterator):
             for event_pair in self._event_pairs:
                 market.add_listener(event_pair[0], event_pair[1])
         try:
-            self._script_adapter.start(PmmMarketInfo(
-                self._strategy.market_info.market.name,
-                self._strategy.trading_pair))
+            try:
+                market_name = self._strategy.market_info.market.name
+                trading_pair = self._strategy.trading_pair
+            except Exception as ex:
+                self.notify(f'Error getting market info for script: {ex}')
+                market_name = 'FIXME'
+                trading_pair = 'FIX-ME'
+
+            self._script_adapter.start(market_name, trading_pair)
         except Exception:
             self.handle_exception('c_start')
 
@@ -123,31 +137,24 @@ cdef class ScriptIterator(TimeIterator):
         TimeIterator.c_tick(self, timestamp)
         if not self._strategy.all_markets_ready():
             return
-        elif self._order_book_trade_listener is None:
+
+        if self._order_book_trade_listener is None:
             self._order_book_trade_listener = OrderBookTradeListener()
-            order_book = self.strategy.market_info.order_book
-            (<CompositeOrderBook>order_book).c_add_listener(
-                self.ORDER_BOOK_TRADE_EVENT_TAG,
-                self._order_book_trade_listener)
+            try:
+                order_book = self.strategy.market_info.order_book
+                (<CompositeOrderBook>order_book).c_add_listener(
+                    self.ORDER_BOOK_TRADE_EVENT_TAG,
+                    self._order_book_trade_listener)
+            except Exception as ex:
+                msg = 'Could not initialise order book watcher for script:\n'
+                msg += f'{ex}\n'
+                msg += 'Script will not receive market trades in tick updates'
+                self.notify(msg)
 
-        cdef object pmm_strategy = PMMParameters()
-        for attr in PMMParameters.__dict__.keys():
-            if attr[:1] != '_':
-                param_value = getattr(self._strategy, attr)
-                setattr(pmm_strategy, attr, param_value)
-
-        orders = []
-        for order in self.strategy.active_orders:
-            active_order = ActiveOrder(order.price, order.quantity, order.is_buy)
-            orders.append(active_order)
+        self.c_update_balances()
 
         try:
-            self._script_adapter.tick(self.strategy.get_mid_price(),
-                                      pmm_strategy,
-                                      self.all_total_balances(),
-                                      self.all_available_balances(),
-                                      orders,
-                                      self._order_book_trade_listener.get_and_reset_trades())
+            self._script_adapter.tick(self._order_book_trade_listener.get_and_reset_trades())
         except Exception:
             self.handle_exception('c_tick')
 
@@ -177,9 +184,6 @@ cdef class ScriptIterator(TimeIterator):
             self._script_adapter.sell_order_completed(event)
         except Exception:
             self.handle_exception('_did_complete_sell_order')
-
-    def set_strategy_parameter(self, item: StrategyParameter):
-        setattr(self._strategy, item.name, item.updated_value)
 
     def notify(self, msg: str):
         # ignore this on unit testing as the below import will mess up unit testing.
@@ -241,14 +245,13 @@ cdef class ScriptIterator(TimeIterator):
         except Exception:
             self.handle_exception('order_refresh')
 
-    def all_total_balances(self):
+    cdef c_update_balances(self):
         all_bals = {m.name: m.get_all_balances() for m in self._markets}
-        return {exchange: {token: bal for token, bal in bals.items() if bal > 0} for exchange, bals in all_bals.items()}
+        self._all_total_balances = {exchange: {
+                                    token: bal for token, bal in bals.items() if bal > 0}
+                                    for exchange, bals in all_bals.items()}
 
-    def all_available_balances(self):
-        all_bals = self.all_total_balances()
-        ret_val = {}
-        for exchange, balances in all_bals.items():
+        self._all_available_balances = {}
+        for exchange, balances in self._all_total_balances.items():
             connector = [c for c in self._markets if c.name == exchange][0]
-            ret_val[exchange] = {token: connector.get_available_balance(token) for token in balances.keys()}
-        return ret_val
+            self._all_available_balances[exchange] = {token: connector.get_available_balance(token) for token in balances.keys()}

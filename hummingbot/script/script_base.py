@@ -1,9 +1,8 @@
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Any, Callable
 from decimal import Decimal
 from statistics import mean, median
 from operator import itemgetter
 
-from .script_interface import ActiveOrder, PMMParameters, PmmMarketInfo
 from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
@@ -13,6 +12,26 @@ from hummingbot.core.event.events import (
 from .script_iterator import ScriptIterator
 
 
+class StrategyParameters:
+    def __init__(self, strategy, strategy_name):
+        super().__setattr__("strategy", strategy)
+        super().__setattr__("strategy_name", strategy_name)
+
+    def __getattr__(self, name):
+        try:
+            value = getattr(self.strategy, name)
+        except AttributeError:
+            raise AttributeError(f'Strategy {self.strategy_name} has no attribute {name}')
+
+        return value
+
+    def __setattr__(self, name, value):
+        try:
+            setattr(self.strategy, name, value)
+        except AttributeError:
+            raise AttributeError(f'Strategy {self.strategy_name} has no attribute {name}')
+
+
 class ScriptBase:
     """
     ScriptBase provides functionality which a script can use to interact with the main HB application.
@@ -20,39 +39,53 @@ class ScriptBase:
     """
     def __init__(self):
         self.iterator: ScriptIterator = None
+        self.strategy_parameters: StrategyParameters = None
 
-        self._mid_price: Decimal = None
-        self.pmm_parameters: PMMParameters = None
-        self.pmm_market_info: PmmMarketInfo = None
-        # all_total_balances stores balances in {exchange: {token: balance}} format
-        # for example {"binance": {"BTC": Decimal("0.1"), "ETH": Decimal("20"}}
-        self.all_total_balances: Dict[str, Dict[str, Decimal]] = None
-        # all_available_balances has the same data structure as all_total_balances
-        self.all_available_balances: Dict[str, Dict[str, Decimal]] = None
-        # active orders
-        self.orders: List[ActiveOrder] = None
         # list of trades recorded since last tick
         self.trades: List[OrderBookTradeEvent] = None
+
+    def init(self, iterator):
+        self.iterator = iterator
+
+        from hummingbot.client.hummingbot_application import HummingbotApplication
+        hb = HummingbotApplication.main_application()
+        strategy_name = hb.strategy_name
+        self.strategy_parameters = StrategyParameters(iterator.strategy, strategy_name)
+
+    @property
+    def strategy(self):
+        return self.iterator.strategy
+
+    @property
+    def strategy_name(self):
+        from hummingbot.client.hummingbot_application import HummingbotApplication
+        hb = HummingbotApplication.main_application()
+        return hb.strategy_name
+
+    @property
+    def all_total_balances(self):
+        return self.iterator.all_total_balances
+
+    @property
+    def all_available_balances(self):
+        return self.iterator.all_available_balances
+
+    @property
+    def active_orders(self):
+        return self.iterator.active_orders
 
     @property
     def mid_price(self):
         """
         The current market mid price (the average of top bid and top ask)
         """
-        return self._mid_price
+        return self.iterator.strategy.get_mid_price()
 
-    def tick(self,
-             mid_price: Decimal,
-             pmm_parameters: PMMParameters,
-             all_total_balances: Dict[str, Dict[str, Decimal]],
-             all_available_balances: Dict[str, Dict[str, Decimal]],
-             orders: List[ActiveOrder],
-             trades: List[OrderBookTradeEvent]):
-        self._mid_price = mid_price
-        self.pmm_parameters = pmm_parameters
-        self.all_total_balances = all_total_balances
-        self.all_available_balances = all_available_balances
-        self.orders = orders
+    @property
+    def live_updates(self):
+        return self.iterator.live_updates
+
+    def tick(self, trades: List[OrderBookTradeEvent]):
         self.trades = trades
         self.on_tick()
 
@@ -63,10 +96,6 @@ class ScriptBase:
         :param msg: The message.
         """
         self.iterator.notify(msg)
-
-    @property
-    def live_updates(self):
-        return self.iterator.live_updates
 
     def set_live_text(self, text: str):
         """

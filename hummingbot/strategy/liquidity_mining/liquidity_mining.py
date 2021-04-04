@@ -81,6 +81,9 @@ class LiquidityMiningStrategy(StrategyPyBase):
         limit_orders = self.order_tracker.active_limit_orders
         return [o[1] for o in limit_orders]
 
+    def all_markets_ready(self):
+        return self._ready_to_trade
+
     def tick(self, timestamp: float):
         """
         Clock tick entry point, is run every second (on normal tick setting).
