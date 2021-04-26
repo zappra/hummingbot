@@ -512,7 +512,8 @@ class BinancePerpetualDerivative(DerivativeBase):
                                 price=Decimal(order_message.get("p"))
                             ),
                             exchange_trade_id=order_message.get("t"),
-                            position=tracked_order.position
+                            position=tracked_order.position,
+                            realized_pnl=order_message.get("rp")
                         )
                         self.trigger_event(self.MARKET_ORDER_FILLED_EVENT_TAG, order_filled_event)
 
@@ -798,7 +799,8 @@ class BinancePerpetualDerivative(DerivativeBase):
                                         Decimal(trade["qty"])),
                                     exchange_trade_id=trade["id"],
                                     leverage=self._leverage,
-                                    position=tracked_order.position
+                                    position=tracked_order.position,
+                                    realized_pnl=float(trade["realizedPnl"])
                                 )
                             )
 
