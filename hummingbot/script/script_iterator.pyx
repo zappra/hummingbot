@@ -105,6 +105,10 @@ cdef class ScriptIterator(TimeIterator):
         return self._strategy.active_orders
 
     @property
+    def active_positions(self):
+        return self._strategy.active_positions
+
+    @property
     def live_updates(self):
         return self._live_updates
 

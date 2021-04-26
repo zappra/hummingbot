@@ -75,6 +75,10 @@ class ScriptBase:
         return self.iterator.active_orders
 
     @property
+    def active_positions(self):
+        return self.iterator.active_positions
+
+    @property
     def mid_price(self):
         """
         The current market mid price (the average of top bid and top ask)
