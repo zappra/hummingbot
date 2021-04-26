@@ -144,33 +144,34 @@ class HummingbotApplication(*commands):
                 pass
             else:
                 shortcuts = global_config_map.get("command_shortcuts").value
-                shortcut = None
+                is_shortcut = False
                 # see if we match against shortcut command
                 if shortcuts is not None:
-                    for s in shortcuts:
-                        if command_split[0] == s['command']:
-                            shortcut = s
-                            break
+                    handled = False
+                    for shortcut in shortcuts:
+                        if command_split[0] == shortcut['command']:
+                            is_shortcut = True
+                            # check number of arguments
+                            num_shortcut_args = len(shortcut['arguments'])
+                            if len(command_split) == num_shortcut_args + 1:
+                                # notify each expansion if there's more than 1
+                                verbose = True if len(shortcut['output']) > 1 else False
+                                # do argument replace and re-enter this function with the expanded command
+                                for output_cmd in shortcut['output']:
+                                    final_cmd = output_cmd
+                                    for i in range(1, num_shortcut_args + 1):
+                                        final_cmd = final_cmd.replace(f'${i}', command_split[i])
+                                    if verbose is True:
+                                        self._notify(f'  >>> {final_cmd}')
+                                    self._handle_command(final_cmd)
+                                    handled = True
 
-                # perform shortcut expansion
-                if shortcut is not None:
-                    # check number of arguments
-                    num_shortcut_args = len(shortcut['arguments'])
-                    if len(command_split) == num_shortcut_args + 1:
-                        # notify each expansion if there's more than 1
-                        verbose = True if len(shortcut['output']) > 1 else False
-                        # do argument replace and re-enter this function with the expanded command
-                        for output_cmd in shortcut['output']:
-                            final_cmd = output_cmd
-                            for i in range(1, num_shortcut_args + 1):
-                                final_cmd = final_cmd.replace(f'${i}', command_split[i])
-                            if verbose is True:
-                                self._notify(f'  >>> {final_cmd}')
-                            self._handle_command(final_cmd)
-                    else:
+                    # didn't find variant with correct number of arguments
+                    if is_shortcut and not handled:
                         self._notify('Invalid number of arguments for shortcut')
+
                 # regular command
-                else:
+                if not is_shortcut:
                     args = self.parser.parse_args(args=command_split)
                     kwargs = vars(args)
                     if not hasattr(args, "func"):
