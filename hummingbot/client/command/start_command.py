@@ -134,7 +134,7 @@ class StartCommand:
                 folder = dirname(script_file)
                 if folder == "":
                     script_file = join(SCRIPTS_PATH, script_file)
-                if self.strategy_name not in ["pure_market_making", "liquidity_mining"]:
+                if self.strategy_name not in ["pure_market_making", "perpetual_market_making"]:
                     self._notify(f"Error: script feature is not available for {self.strategy_name}")
                 else:
                     try:
@@ -144,6 +144,7 @@ class StartCommand:
                     except Exception as ex:
                         self._notify(f"Failed to start script {script_file}:")
                         self._notify(f"{ex}")
+                        raise
 
             if global_config_map["ethgasstation_gas_enabled"].value and ethereum_gas_station_required():
                 EthGasStationLookup.get_instance().start()
