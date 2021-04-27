@@ -26,22 +26,43 @@ class StopCommand:
             import appnope
             appnope.nap()
 
+        if self._trading_required and not skip_order_cancellation:
+            if self.strategy_name == 'perpetual_market_making':
+                # ensure no new orders are created
+                self.strategy.exiting = True
+
+                # cancel outstanding orders
+                success = await self._cancel_outstanding_orders()
+
+                # now go ahead and cancel any open positions
+                self._notify("Closing open positions...")
+                # Give some time for cancellation events to trigger
+                await asyncio.sleep(1.0)
+                while True:
+                    if len(self.strategy.active_positions) == 0:
+                        break
+                    await asyncio.sleep(0.1)
+
+                # give some time for script fill notifications
+                await asyncio.sleep(1.0)
+                self._notify("All positions closed.")
+
+                self.markets = {}
+            else:
+                # Remove the strategy from clock
+                if self.clock:
+                    self.clock.remove_iterator(self.strategy)
+                success = await self._cancel_outstanding_orders()
+                # Give some time for cancellation events to trigger
+                await asyncio.sleep(0.5)
+
+                if success:
+                    # Only erase markets when cancellation has been successful
+                    self.markets = {}
+
         if self._script_iterator is not None:
             self._script_iterator.stop(self.clock)
             self._script_iterator = None
-
-        if self._trading_required and not skip_order_cancellation:
-            # Remove the strategy from clock before cancelling orders, to
-            # prevent race condition where the strategy tries to create more
-            # orders during cancellation.
-            if self.clock:
-                self.clock.remove_iterator(self.strategy)
-            success = await self._cancel_outstanding_orders()
-            # Give some time for cancellation events to trigger
-            await asyncio.sleep(0.5)
-            if success:
-                # Only erase markets when cancellation has been successful
-                self.markets = {}
 
         if self.strategy_task is not None and not self.strategy_task.cancelled():
             self.strategy_task.cancel()

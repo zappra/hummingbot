@@ -150,6 +150,7 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
         self._ts_peak_bid_price = Decimal('0')
         self._ts_peak_ask_price = Decimal('0')
         self._exit_orders = []
+        self._exiting = False
 
         self.c_add_markets([market_info.market])
 
@@ -395,6 +396,14 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
         self._asset_price_delegate = value
 
     @property
+    def exiting(self):
+        return self._exiting
+
+    @exiting.setter
+    def exiting(self, value):
+        self._exiting = value
+
+    @property
     def order_tracker(self):
         return self._sb_order_tracker
 
@@ -579,37 +588,38 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
                                           f"making may be dangerous when markets or networks are unstable.")
 
             if len(session_positions) == 0:
-                self._exit_orders = []  # Empty list of exit order at this point to reduce size
-                proposal = None
-                asset_mid_price = Decimal("0")
-                # asset_mid_price = self.c_set_mid_price(market_info)
+                if not self._exiting:
+                    self._exit_orders = []  # Empty list of exit order at this point to reduce size
+                    proposal = None
+                    asset_mid_price = Decimal("0")
+                    # asset_mid_price = self.c_set_mid_price(market_info)
 
-                if self._create_timestamp == 0:
-                    warmup = 10
-                    self.notify_hb_app(f"Setting initial warmup period of {warmup} seconds")
-                    self._create_timestamp = self._current_timestamp + warmup
+                    if self._create_timestamp == 0:
+                        warmup = 10
+                        self.notify_hb_app(f"Setting initial warmup period of {warmup} seconds")
+                        self._create_timestamp = self._current_timestamp + warmup
 
-                if self._create_timestamp <= self._current_timestamp:
-                    # 1. Allow script to update parameters
-                    self.script_order_refresh()
-                    # 2. Create base order proposals
-                    proposal =self.c_create_base_proposal()
-                    # 3. Apply functions that limit numbers of buys and sells proposal
-                    self.c_apply_order_levels_modifiers(proposal)
-                    # 4. Apply functions that modify orders price
-                    self.c_apply_order_price_modifiers(proposal)
-                    # 5. Apply budget constraint, i.e. can't buy/sell more than what you have.
-                    self.c_apply_budget_constraint(proposal)
+                    if self._create_timestamp <= self._current_timestamp:
+                        # 1. Allow script to update parameters
+                        self.script_order_refresh()
+                        # 2. Create base order proposals
+                        proposal =self.c_create_base_proposal()
+                        # 3. Apply functions that limit numbers of buys and sells proposal
+                        self.c_apply_order_levels_modifiers(proposal)
+                        # 4. Apply functions that modify orders price
+                        self.c_apply_order_price_modifiers(proposal)
+                        # 5. Apply budget constraint, i.e. can't buy/sell more than what you have.
+                        self.c_apply_budget_constraint(proposal)
 
-                    if not self._take_if_crossed:
-                        self.c_filter_out_takers(proposal)
-                self.c_cancel_active_orders(proposal)
-                if self.c_to_create_orders(proposal):
-                    self._close_order_type = OrderType.LIMIT
-                    self.c_execute_orders_proposal(proposal, PositionAction.OPEN)
-                # Reset peak ask and bid prices
-                self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
-                self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
+                        if not self._take_if_crossed:
+                            self.c_filter_out_takers(proposal)
+                    self.c_cancel_active_orders(proposal)
+                    if self.c_to_create_orders(proposal):
+                        self._close_order_type = OrderType.LIMIT
+                        self.c_execute_orders_proposal(proposal, PositionAction.OPEN)
+                    # Reset peak ask and bid prices
+                    self._ts_peak_ask_price = market.get_price(self.trading_pair, False)
+                    self._ts_peak_bid_price = market.get_price(self.trading_pair, True)
             else:
                 self.c_manage_positions(session_positions)
         finally:
@@ -785,7 +795,7 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
             # check if stop loss order needs to be placed
             stop_loss_price = position.entry_price * (Decimal("1") + self._stop_loss_spread) if position.amount < 0 \
                 else position.entry_price * (Decimal("1") - self._stop_loss_spread)
-            if (top_ask <= stop_loss_price and position.amount > 0):
+            if ((top_ask <= stop_loss_price or self._exiting) and position.amount > 0):
                 price = market.c_quantize_order_price(self.trading_pair, stop_loss_price)
                 take_profit_orders = [o for o in active_orders if (not o.is_buy and o.price > price and o.client_order_id in self._exit_orders)]
                 # cancel take profit orders if they exist
@@ -801,7 +811,7 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
                         self._market_position_close_timestamp = self._current_timestamp + 10  # 10 seconds delay before attempting to close position with market order
                         self.logger().info(f"Creating stop loss sell order to close long position.")
                         sells.append(PriceSize(price, size))
-            elif (top_bid >= stop_loss_price and position.amount < 0):
+            elif ((top_bid >= stop_loss_price or self._exiting) and position.amount < 0):
                 price = market.c_quantize_order_price(self.trading_pair, stop_loss_price)
                 take_profit_orders = [o for o in active_orders if (o.is_buy and o.price < price and o.client_order_id in self._exit_orders)]
                 # cancel take profit orders if they exist
