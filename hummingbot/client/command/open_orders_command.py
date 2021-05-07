@@ -9,7 +9,8 @@ from datetime import datetime
 from datetime import timezone
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.core.data_type.common import OpenOrder
-from hummingbot.core.utils.market_price import usd_value, get_binance_mid_price
+from hummingbot.core.utils.market_price import get_binance_mid_price
+from hummingbot.core.rate_oracle.rate_oracle import RateOracle
 
 s_float_0 = float(0)
 s_decimal_0 = Decimal("0")
@@ -45,22 +46,22 @@ class OpenOrdersCommand:
         cur_balances = await self.get_current_balances(exchange)
         total_value = 0
         for o in orders:
-            total_value += await usd_value(o.trading_pair.split("-")[0], o.amount)
+            total_value += await RateOracle.global_value(o.trading_pair.split("-")[0], o.amount)
         for order in orders:
             base, quote = order.trading_pair.split("-")
             side = "BUY" if order.is_buy else "SELL"
             mid_price = await get_binance_mid_price(order.trading_pair)
             spread = abs(order.price - mid_price) / mid_price
-            size_usd = await usd_value(order.trading_pair.split("-")[0], order.amount)
+            size_global = await RateOracle.global_value(order.trading_pair.split("-")[0], order.amount)
             age = pd.Timestamp((datetime.utcnow().replace(tzinfo=timezone.utc).timestamp() * 1e3 - order.time) / 1e3,
                                unit='s').strftime('%M:%S')
-            data_row = [order.trading_pair, side, f"{spread:.2%}", round(size_usd), age]
+            data_row = [order.trading_pair, side, f"{spread:.2%}", round(size_global), age]
             if full_report:
                 token = quote if order.is_buy else base
                 token_value = order.amount * order.price if order.is_buy else order.amount
                 per_bal = token_value / cur_balances[token]
                 token_txt = f"({token})"
-                data_row.extend([f"{per_bal:.0%} {token_txt:>6}", f"{size_usd / total_value:.0%}"])
+                data_row.extend([f"{per_bal:.0%} {token_txt:>6}", f"{size_global / total_value:.0%}"])
             data.append(data_row)
         lines = []
         orders_df: pd.DataFrame = pd.DataFrame(data=data, columns=columns)
