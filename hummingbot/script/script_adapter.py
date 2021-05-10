@@ -8,7 +8,8 @@ from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent,
-    OrderBookTradeEvent
+    OrderBookTradeEvent,
+    FundingPaymentCompletedEvent,
 )
 
 
@@ -53,6 +54,10 @@ class ScriptAdapter:
     def sell_order_completed(self, event: SellOrderCompletedEvent):
         if self.script is not None:
             self.script.on_sell_order_completed(event)
+
+    def funding_payment_completed(self, event: FundingPaymentCompletedEvent):
+        if self.script is not None:
+            self.script.on_funding_payment_completed(event)
 
     def order_refresh(self):
         if self.script is not None:

@@ -12,6 +12,7 @@ cdef class ScriptIterator(TimeIterator):
         object _order_filled_forwarder
         object _did_complete_buy_order_forwarder
         object _did_complete_sell_order_forwarder
+        object _funding_payment_forwarder
         object _script_module
         bint _live_updates
         object _ev_loop

@@ -14,7 +14,8 @@ from hummingbot.core.event.events import (
     SellOrderCompletedEvent,
     MarketEvent,
     OrderBookEvent,
-    OrderBookTradeEvent
+    OrderBookTradeEvent,
+    FundingPaymentCompletedEvent
 )
 from hummingbot.core.data_type.composite_order_book import CompositeOrderBook
 from hummingbot.core.data_type.composite_order_book cimport CompositeOrderBook
@@ -70,10 +71,12 @@ cdef class ScriptIterator(TimeIterator):
         self._order_filled_forwarder = SourceInfoEventForwarder(self._order_filled)
         self._did_complete_buy_order_forwarder = SourceInfoEventForwarder(self._did_complete_buy_order)
         self._did_complete_sell_order_forwarder = SourceInfoEventForwarder(self._did_complete_sell_order)
+        self._funding_payment_forwarder = SourceInfoEventForwarder(self._did_complete_funding_payment)
         self._event_pairs = [
             (MarketEvent.OrderFilled, self._order_filled_forwarder),
             (MarketEvent.BuyOrderCompleted, self._did_complete_buy_order_forwarder),
-            (MarketEvent.SellOrderCompleted, self._did_complete_sell_order_forwarder)
+            (MarketEvent.SellOrderCompleted, self._did_complete_sell_order_forwarder),
+            (MarketEvent.FundingPaymentCompleted, self._funding_payment_forwarder)
         ]
         self._ev_loop = asyncio.get_event_loop()
 
@@ -188,6 +191,15 @@ cdef class ScriptIterator(TimeIterator):
             self._script_adapter.sell_order_completed(event)
         except Exception:
             self.handle_exception('_did_complete_sell_order')
+
+    def _did_complete_funding_payment(self,
+                                      event_tag: int,
+                                      market: ExchangeBase,
+                                      event: FundingPaymentCompletedEvent):
+        try:
+            self._script_adapter.funding_payment_completed(event)
+        except Exception:
+            self.handle_exception('_did_complete_funding_payment')
 
     def notify(self, msg: str):
         # ignore this on unit testing as the below import will mess up unit testing.

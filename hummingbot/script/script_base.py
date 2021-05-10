@@ -7,7 +7,8 @@ from hummingbot.core.event.events import (
     OrderFilledEvent,
     BuyOrderCompletedEvent,
     SellOrderCompletedEvent,
-    OrderBookTradeEvent
+    OrderBookTradeEvent,
+    FundingPaymentCompletedEvent
 )
 from .script_iterator import ScriptIterator
 
@@ -255,6 +256,12 @@ class ScriptBase:
         """
         Is called upon a sell order is completely filled.
         It is intended to be implemented by the derived class of this class.
+        """
+        pass
+
+    def on_funding_payment_completed(self, event: FundingPaymentCompletedEvent):
+        """
+        Called for funding payments on derivative connectors
         """
         pass
 
