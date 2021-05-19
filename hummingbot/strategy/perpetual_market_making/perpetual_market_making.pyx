@@ -456,7 +456,7 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
         return pd.DataFrame(data=data, columns=columns)
 
     def active_positions_df(self) -> pd.DataFrame:
-        columns = ["#", "Type", "Entry", "PnL"]
+        columns = ["#", "Type", "Entry", "Amt", "PnL"]
         data = []
         market, trading_pair = self._market_info.market, self._market_info.trading_pair
         for i, idx in enumerate(self.active_positions):
@@ -466,6 +466,7 @@ cdef class PerpetualMarketMakingStrategy(StrategyBase):
                 i+1,
                 idx.position_side.name,
                 round(idx.entry_price, 4),
+                idx.amount,
                 round(unrealized_profit, 2)
             ])
 
